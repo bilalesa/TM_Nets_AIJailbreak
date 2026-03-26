@@ -1,33 +1,28 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
-  title: "Nets AI Jailbreak",
-  description: "A game where you try to jailbreak an AI by sending it prompts. Built with Next.js, Express, and Supabase.",
+  title: "Breaking the Prompt - Inside AI Manipulation",
+  description: "Get the AI to reveal the secret code. A jailbreak challenge by TrendAI x NETS.",
 };
 
-// frontend/src/app/layout.tsx
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body 
-        className="min-h-full flex flex-col" 
-        suppressHydrationWarning // Add it here too!
+      <body
+        className={`${inter.variable} font-inter min-h-screen`}
+        suppressHydrationWarning
       >
         {children}
       </body>
