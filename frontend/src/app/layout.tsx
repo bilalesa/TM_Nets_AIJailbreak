@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -11,6 +11,13 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Breaking the Prompt - Inside AI Manipulation",
   description: "Get the AI to reveal the secret code. A jailbreak challenge by TrendAI x NETS.",
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

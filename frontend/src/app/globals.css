@@ -5,11 +5,18 @@
   --brand-red-dark: #922B21;
   --brand-red-light: #E74C3C;
   --brand-red-muted: rgba(192, 57, 43, 0.15);
-  --font-inter: 'Inter', sans-serif;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  background-color: #111827;
 }
 
 body {

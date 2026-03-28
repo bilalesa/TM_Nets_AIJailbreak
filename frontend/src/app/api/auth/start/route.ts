@@ -4,11 +4,36 @@
 // 2. Stores the returned JWT in an HTTP-Only cookie (safe from XSS)
 // 3. Handles duplicate username conflicts
 
-/// <reference types="next" />
-/// <reference types="node" />
-
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
+
+// Service-role client used only to broadcast the player_joined event.
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+);
+
+async function broadcastPlayerJoined(payload: { username: string }) {
+  const channel = supabase.channel('leaderboard-updates');
+  const safePayload = {
+    username: payload.username,
+    sentAt: new Date().toISOString(),
+  };
+
+  const maybeHttpSend = (
+    channel as unknown as { httpSend?: (event: string, payload: unknown) => Promise<unknown> }
+  ).httpSend;
+  if (typeof maybeHttpSend === 'function') {
+    return maybeHttpSend.call(channel, 'player_joined', safePayload);
+  }
+
+  return channel.send({
+    type: 'broadcast' as const,
+    event: 'player_joined',
+    payload: safePayload,
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -51,6 +76,11 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 24, // 24 hours
       path: '/',
     });
+
+    // Broadcast player_joined so leaderboard subscribers re-fetch (fire-and-forget)
+    broadcastPlayerJoined({ username: data.username })
+      .then(() => {})
+      .catch((err: unknown) => console.warn('[broadcast player_joined]', err));
 
     // Return only what the frontend needs — never expose the raw JWT
     return NextResponse.json({

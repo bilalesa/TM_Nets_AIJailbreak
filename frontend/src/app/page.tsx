@@ -110,7 +110,7 @@ export default function LoginPage() {
       setStatus('success');
       // Small delay to show success state before redirect
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/stage/1');
       }, 600);
     } catch {
       setStatus('error');
@@ -143,14 +143,6 @@ export default function LoginPage() {
           // Fallback gradient while image loads or if not set
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-        {/* Gradient fallback (shown if image fails or before load) */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 80% 70% at 70% 40%, rgba(220, 120, 110, 0.35) 0%, transparent 60%), radial-gradient(ellipse 50% 50% at 20% 80%, rgba(160, 190, 220, 0.3) 0%, transparent 55%), #f5f0ef',
           }}
         />
       </div>
