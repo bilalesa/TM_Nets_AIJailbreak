@@ -9,9 +9,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import { createClient } from '@supabase/supabase-js';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
 import { embedText, isTooSimilar } from '@/lib/embeddings';
+import { getSupabaseServerClient } from '@/lib/supabaseClient';
 
 // LLM config — set these in frontend/.env.local
 // LLM_API_ENDPOINT = base URL e.g. https://your-api.example.com/v1
@@ -21,10 +21,7 @@ const LLM_ENDPOINT = `${process.env.LLM_API_ENDPOINT}/chat/completions`;
 const LLM_API_KEY  = process.env.LLM_API_KEY!;
 const LLM_MODEL    = process.env.LLM_MODEL ?? 'gpt-4o';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabase = getSupabaseServerClient();
 
 // In-memory rate limiter: 5 requests per 10 seconds per player
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();

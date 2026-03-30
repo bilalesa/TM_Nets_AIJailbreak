@@ -9,15 +9,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import { createClient } from '@supabase/supabase-js';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
 import { computeTimeBonus } from '@/lib/avatar';
 import { embedText, saveWinningPrompt } from '@/lib/embeddings';
+import { getSupabaseServerClient } from '@/lib/supabaseClient';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabase = getSupabaseServerClient();
 
 async function broadcastScoreUpdated(payload: { playerId: string; stageNumber: number; scoreAwarded: number }) {
   const channel = supabase.channel('leaderboard-updates');
