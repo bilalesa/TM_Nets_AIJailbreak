@@ -89,7 +89,7 @@ app.use((_error: unknown, _req: Request, res: Response, _next: NextFunction) => 
 	return res.status(500).json({ error: 'Internal server error' });
 });
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
 	console.log(`Server running on port ${PORT}`);
 });
 
