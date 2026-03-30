@@ -38,7 +38,7 @@ export const authenticateUser = (req: Request, res: Response, next: NextFunction
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { username: string, id: string };
     // Attach the user to the request object so controllers can use it
-    (req as any).user = decoded;
+    req.user = decoded;
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });

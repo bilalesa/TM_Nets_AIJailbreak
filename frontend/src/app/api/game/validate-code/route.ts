@@ -62,22 +62,37 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Parse body
-    const { stageNumber, code, elapsedSeconds } = await request.json() as {
-      stageNumber: number;
-      code: string;
-      elapsedSeconds: number;
+    const { stageNumber, code, elapsedSeconds } = (await request.json()) as {
+      stageNumber?: unknown;
+      code?: unknown;
+      elapsedSeconds?: unknown;
     };
 
-    if (!stageNumber || stageNumber < 1 || stageNumber > 5) {
+    if (!Number.isInteger(stageNumber)) {
       return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
     }
+
+    const parsedStageNumber = stageNumber as number;
+
+    if (parsedStageNumber < 1 || parsedStageNumber > 5) {
+      return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
+    }
+
+    if (typeof code !== 'string' || !code.trim()) {
+      return NextResponse.json({ error: 'Code is required' }, { status: 400 });
+    }
+
+    const elapsedSecondsSafe =
+      typeof elapsedSeconds === 'number' && Number.isFinite(elapsedSeconds) && elapsedSeconds >= 0
+        ? elapsedSeconds
+        : 0;
 
     // 3. Prevent double-submission
     const { data: existing } = await supabase
       .from('stage_completions')
       .select('id, score_awarded')
       .eq('player_id', player.id)
-      .eq('stage_number', stageNumber)
+      .eq('stage_number', parsedStageNumber)
       .maybeSingle();
 
     if (existing) {
@@ -89,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Validate code (case-insensitive, trimmed)
-    const stageConfig = SERVER_STAGE_CONFIGS[stageNumber - 1];
+    const stageConfig = SERVER_STAGE_CONFIGS[parsedStageNumber - 1];
     const isCorrect =
       code.trim().toUpperCase() === stageConfig.secretCode.toUpperCase();
 
@@ -98,7 +113,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Compute score: baseXP + time bonus
-    const timeBonus = computeTimeBonus(elapsedSeconds, stageConfig.baseXP);
+    const timeBonus = computeTimeBonus(elapsedSecondsSafe, stageConfig.baseXP);
     const scoreAwarded = stageConfig.baseXP + timeBonus;
 
     // 6. Record completion
@@ -106,9 +121,9 @@ export async function POST(request: NextRequest) {
       .from('stage_completions')
       .insert({
         player_id: player.id,
-        stage_number: stageNumber,
+        stage_number: parsedStageNumber,
         score_awarded: scoreAwarded,
-        time_taken_seconds: elapsedSeconds,
+        time_taken_seconds: elapsedSecondsSafe,
       });
 
     if (completionError) throw completionError;
@@ -138,7 +153,7 @@ export async function POST(request: NextRequest) {
       .from('prompt_logs')
       .update({ is_successful: true })
       .eq('player_id', player.id)
-      .eq('stage_number', stageNumber)
+      .eq('stage_number', parsedStageNumber)
       .order('created_at', { ascending: false })
       .limit(1)
       .then(({ error }) => {
@@ -160,7 +175,7 @@ export async function POST(request: NextRequest) {
           .from('prompt_logs')
           .select('prompt_text')
           .eq('player_id', player.id)
-          .eq('stage_number', stageNumber);
+          .eq('stage_number', parsedStageNumber);
 
         if (!prompts || prompts.length === 0) return;
 
@@ -179,7 +194,7 @@ export async function POST(request: NextRequest) {
         await saveWinningPrompt(
           supabase,
           player.id,
-          stageNumber,
+          parsedStageNumber,
           longestPrompt,
           embedding,
         );
@@ -192,7 +207,7 @@ export async function POST(request: NextRequest) {
     // 10. Broadcast score_updated event to Supabase Realtime
     // This notifies all leaderboard subscribers to re-fetch — zero polling needed.
     // Fire-and-forget: don't await so it doesn't add latency to the response.
-    broadcastScoreUpdated({ playerId: player.id, stageNumber, scoreAwarded })
+    broadcastScoreUpdated({ playerId: player.id, stageNumber: parsedStageNumber, scoreAwarded })
       .then(() => {})
       .catch((err: unknown) => console.warn('[broadcast score_updated]', err));
 
@@ -202,8 +217,8 @@ export async function POST(request: NextRequest) {
       timeBonus,
       baseXP: stageConfig.baseXP,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[/api/game/validate-code]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to validate code' }, { status: 500 });
   }
 }

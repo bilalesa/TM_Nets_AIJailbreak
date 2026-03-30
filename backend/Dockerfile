@@ -1,23 +1,24 @@
-# 1. Start with a lightweight, secure Node.js environment
-FROM node:22-alpine
+FROM node:22-alpine AS builder
 
-# 2. Set the working directory inside the container
 WORKDIR /app
-
-# 3. Copy over your package files first (this caches dependencies to make future builds faster)
 COPY package*.json ./
-
-# 4. Install production and development dependencies
-RUN npm install
-
-# 5. Copy the rest of your backend source code
+RUN npm ci
 COPY . .
-
-# 6. Compile the TypeScript code into plain JavaScript
 RUN npm run build
 
-# 7. Expose the port your Express server runs on
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=builder /app/dist ./dist
+
+USER node
 EXPOSE 3001
 
-# 8. Start the compiled application
-CMD [ "npm", "start" ]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+	CMD node -e "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+CMD ["node", "dist/index.js"]

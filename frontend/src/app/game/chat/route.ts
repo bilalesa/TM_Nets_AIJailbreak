@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       });
 
     return NextResponse.json({ response: aiText });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[/api/game/chat]', error);
     return NextResponse.json(
       { error: 'Failed to get AI response' },

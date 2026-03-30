@@ -2,7 +2,7 @@
 // Returns the current player's profile + which stages they've completed.
 // Used on initial load to hydrate the sidebar state.
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
@@ -12,7 +12,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('game_session_token')?.value;
@@ -53,8 +53,8 @@ export async function GET(_request: NextRequest) {
       ),
       completions: completionsRes.data ?? [],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[/api/game/player]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to load player profile' }, { status: 500 });
   }
 }

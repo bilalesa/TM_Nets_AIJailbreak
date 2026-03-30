@@ -37,13 +37,8 @@ export default function StagePage() {
   const params = useParams();
   const router = useRouter();
   const stageId = Number(params.id);
-
-  // ── Validate stage number ──────────────────────────────────────────────────
   const stageConfig = STAGE_CONFIGS[stageId - 1];
-  if (!stageConfig || stageId < 1 || stageId > 5) {
-    router.replace('/dashboard');
-    return null;
-  }
+  const invalidStage = !stageConfig || Number.isNaN(stageId) || stageId < 1 || stageId > 5;
 
   // ── Player state (hydrated from API) ─────────────────────────────────────
   const [player, setPlayer] = useState<PlayerState | null>(null);
@@ -75,8 +70,15 @@ export default function StagePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Stopwatch ─────────────────────────────────────────────────────────────
-  const { elapsed, formatted, running, start: startTimer, stop: stopTimer, reset: resetTimer } =
+  const { elapsed, formatted, running, start: startTimer, stop: stopTimer } =
     useStopwatch(false);
+  // Redirect invalid stage ids after hooks are initialized.
+  useEffect(() => {
+    if (invalidStage) {
+      router.replace('/dashboard');
+    }
+  }, [invalidStage, router]);
+
 
   // ── Modals ────────────────────────────────────────────────────────────────
   const [showEnterCode, setShowEnterCode] = useState(false);
@@ -259,6 +261,7 @@ export default function StagePage() {
 
   // ── Handle hint click ─────────────────────────────────────────────────────
   const handleHint = () => {
+    if (!stageConfig) return;
     const hint = stageConfig.hint;
     setMessages((prev) => [
       ...prev,
@@ -272,7 +275,7 @@ export default function StagePage() {
   };
 
   // ── Loading state ─────────────────────────────────────────────────────────
-  if (playerLoading || !player) {
+  if (invalidStage || playerLoading || !player || !stageConfig) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-red-50">
         <div className="flex flex-col items-center gap-3">

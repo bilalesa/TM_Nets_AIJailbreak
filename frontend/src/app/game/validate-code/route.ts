@@ -151,8 +151,8 @@ export async function POST(request: NextRequest) {
       timeBonus,
       baseXP: stageConfig.baseXP,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[/api/game/validate-code]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to validate code' }, { status: 500 });
   }
 }

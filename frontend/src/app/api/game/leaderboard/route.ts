@@ -3,7 +3,7 @@
 // Also returns the current player's own stats for the hero card at the top.
 // Polled every 10s from the client for live updates — no WebSocket needed.
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
@@ -20,7 +20,7 @@ function formatTime(seconds: number): string {
   return [h, m, s].map((v) => String(v).padStart(2, '0')).join(' : ');
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // 1. Identify current player from cookie (optional — leaderboard is readable even
     //    if the JWT is missing, but we need it to highlight the current user)
@@ -117,8 +117,8 @@ export async function GET(_request: NextRequest) {
       currentPlayer,
       totalPlayers: ranked.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[/api/game/leaderboard]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to load leaderboard' }, { status: 500 });
   }
 }

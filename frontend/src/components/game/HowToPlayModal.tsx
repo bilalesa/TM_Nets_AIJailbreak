@@ -99,7 +99,7 @@ export default function HowToPlayModal({ isOpen, onClose, stageName }: HowToPlay
                   onClick={onClose}
                   className="w-full py-2.5 rounded-xl bg-[#C0392B] text-white text-xs sm:text-sm font-semibold hover:bg-[#922B21] transition-colors"
                 >
-                  Got it — let's hack!
+                  Got it - let&apos;s hack!
                 </button>
               </div>
             </div>

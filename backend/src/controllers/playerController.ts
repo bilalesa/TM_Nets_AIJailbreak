@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 
 export const getMyProfile = (req: Request, res: Response) => {
-  // We cast to 'any' because we attached 'user' in the middleware
-  const user = (req as any).user;
+  const user = req.user;
 
   if (!user) {
     return res.status(401).json({ error: "User context not found" });

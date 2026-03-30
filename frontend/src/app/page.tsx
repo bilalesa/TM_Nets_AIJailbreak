@@ -350,7 +350,7 @@ export default function LoginPage() {
                       className="flex items-center gap-2"
                     >
                       <CheckCircle2 className="w-5 h-5" />
-                      Let's go!
+                      Let&apos;s go!
                     </motion.span>
                   ) : (
                     <motion.span

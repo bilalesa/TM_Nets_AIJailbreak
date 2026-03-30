@@ -10,9 +10,9 @@ export const startSession = async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Server auth misconfigured: JWT_SECRET is missing' });
     }
 
-    const { username } = req.body;
+    const { username } = req.body as { username?: unknown };
 
-    if (!username || typeof username !== 'string' || !username.trim()) {
+    if (typeof username !== 'string' || !username.trim()) {
       return res.status(400).json({ error: 'Username is required' });
     }
 
@@ -60,8 +60,8 @@ export const startSession = async (req: Request, res: Response) => {
     );
 
     return res.json({ token, username: player.username });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[startSession]', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Unable to start session right now.' });
   }
 };
