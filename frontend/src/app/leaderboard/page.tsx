@@ -221,13 +221,13 @@ export default function LeaderboardPage() {
         )}
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 overflow-y-auto">
+        <main className="flex-1 flex flex-col min-w-0 h-full p-4 sm:p-6 lg:p-8">
           {/* ── Hero stats cards ── */}
           <motion.div
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6"
+            className="flex-shrink-0 grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6"
           >
             {/* Stats card (red) */}
             <div className="relative w-full min-h-[140px] rounded-[20px] overflow-hidden isolate">
@@ -300,7 +300,7 @@ export default function LeaderboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-100 overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.05)]"
+            className="flex-1 flex flex-col min-h-0 bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-100 overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.05)]"
           >
             {/* Table header bar */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -359,7 +359,7 @@ export default function LeaderboardPage() {
             </div>
 
             {/* Rows */}
-            <div className="divide-y divide-gray-50">
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
               <AnimatePresence initial={false}>
                 {leaderboard.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">

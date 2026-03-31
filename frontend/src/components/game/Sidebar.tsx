@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Lock,
   CheckCircle2,
@@ -39,8 +39,11 @@ export default function Sidebar({
   onToggle,
 }: SidebarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [showExitModal, setShowExitModal] = useState(false);
   const avatarUrl = getAvatarUrl(username);
+
+  const isLeaderboard = pathname === '/leaderboard';
 
   const getStageStatus = (stageNum: number) => {
     if (completedStages.includes(stageNum)) return 'completed';
@@ -222,18 +225,21 @@ export default function Sidebar({
           <Link
             href="/leaderboard"
             className={cn(
-              'flex items-center gap-3 px-4 py-2.5 mx-2 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors',
+              'flex items-center gap-3 px-4 py-2.5 mx-2 rounded-xl transition-colors',
               collapsed && 'justify-center px-0 mx-0 py-4',
+              isLeaderboard
+                ? 'bg-[#FDECEA] text-[#C0392B]'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
             )}
           >
-            <Trophy className="w-4 h-4 flex-shrink-0" />
+            <Trophy className={cn("w-4 h-4 flex-shrink-0", isLeaderboard && "text-[#C0392B]")} />
             <AnimatePresence>
               {!collapsed && (
                 <motion.span
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="text-sm font-medium"
+                  className={cn("text-sm font-medium", isLeaderboard && "font-semibold")}
                 >
                   Leaderboard
                 </motion.span>
