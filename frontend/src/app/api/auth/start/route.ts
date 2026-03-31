@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 // Service-role client used only to broadcast the player_joined event.
 const supabase = getSupabaseServerClient();
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = getBackendBaseUrl();
 
     const backendRes = await fetch(`${backendUrl}/api/auth/start`, {
       method: 'POST',

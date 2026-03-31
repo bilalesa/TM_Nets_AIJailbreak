@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 export async function GET() {
   try {
@@ -10,7 +11,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized: No session token' }, { status: 401 });
     }
 
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = getBackendBaseUrl();
     const backendRes = await fetch(`${backendUrl}/api/players/me`, {
       method: 'GET',
       headers: {

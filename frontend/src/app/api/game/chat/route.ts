@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-
-const DEFAULT_BACKEND_URL = 'http://localhost:3001';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const backendUrl = process.env.BACKEND_URL || DEFAULT_BACKEND_URL;
+    const backendUrl = getBackendBaseUrl();
 
     const backendRes = await fetch(`${backendUrl}/api/games/chat`, {
       method: 'POST',
