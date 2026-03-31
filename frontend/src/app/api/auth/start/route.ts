@@ -58,10 +58,7 @@ export async function POST(request: Request) {
     if (!backendRes.ok) {
       // Propagate the error (including 409 duplicate) straight through
       return NextResponse.json(
-        {
-          error: data.error || 'Backend error',
-          upstream: backendUrl,
-        },
+        { error: data.error || 'Backend error' },
         { status: backendRes.status },
       );
     }
@@ -90,13 +87,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('[/api/auth/start]', error);
-
-    const upstream = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'unconfigured';
     return NextResponse.json(
-      {
-        error: 'Internal Server Error',
-        upstream,
-      },
+      { error: 'Internal Server Error' },
       { status: 500 },
     );
   }
