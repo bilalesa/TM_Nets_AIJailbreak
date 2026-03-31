@@ -127,7 +127,6 @@ export default function LeaderboardPage() {
           return;
         }
         const data = await res.json();
-        console.log('Fetched leaderboard:', data);
         setLeaderboard(data.leaderboard ?? []);
         setCurrentPlayer(data.currentPlayer ?? null);
         setTotalPlayers(data.totalPlayers ?? 0);
@@ -207,7 +206,7 @@ export default function LeaderboardPage() {
         />
       </div>
 
-      <div className="relative z-10 flex min-h-[100dvh] overflow-x-hidden">
+      <div className="relative z-10 flex h-[100dvh] overflow-hidden">
         {/* Sidebar */}
         {sidebarPlayer && (
           <Sidebar
@@ -222,7 +221,7 @@ export default function LeaderboardPage() {
         )}
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+        <main className="flex-1 flex flex-col min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 overflow-y-auto">
           {/* ── Hero stats cards ── */}
           <motion.div
             initial={{ opacity: 0, y: -16 }}
