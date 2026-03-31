@@ -127,6 +127,7 @@ export default function LeaderboardPage() {
           return;
         }
         const data = await res.json();
+        console.log('Fetched leaderboard:', data);
         setLeaderboard(data.leaderboard ?? []);
         setCurrentPlayer(data.currentPlayer ?? null);
         setTotalPlayers(data.totalPlayers ?? 0);
