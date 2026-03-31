@@ -113,13 +113,6 @@ export default function LeaderboardPage() {
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
 
-  // To be removed after verifying that env vars are correctly loaded in production (since the leaderboard won't load without them)
-  useEffect(() => {
-    if (process.env.NODE_ENV) {
-      console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-    }
-  }, []);
-
   // ── Fetch leaderboard ──────────────────────────────────────────────────────
   const fetchLeaderboard = useCallback(async (silent = false) => {
       if (!silent) setIsRefreshing(true);
