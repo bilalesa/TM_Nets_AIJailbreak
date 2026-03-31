@@ -3,12 +3,57 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export function useStopwatch(autoStart = false) {
+export function useStopwatch(autoStart = false, persistKey?: string) {
   const [elapsed, setElapsed] = useState(0); // seconds
-  const [running, setRunning] = useState(autoStart);
+  const [running, setRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const accumulatedRef = useRef(0);
+  const isInitializedRef = useRef(false);
+
+  // Initialize from sessionStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (persistKey) {
+        const stored = sessionStorage.getItem(persistKey);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            accumulatedRef.current = parsed.accumulated || 0;
+            if (parsed.running && parsed.startTime) {
+              const delta = Math.floor((Date.now() - parsed.startTime) / 1000);
+              accumulatedRef.current += delta;
+              setRunning(true);
+            } else {
+              setRunning(false);
+            }
+            setElapsed(accumulatedRef.current);
+          } catch (e) {
+            console.error('Failed to parse stopwatch state:', e);
+          }
+        } else if (autoStart) {
+          setRunning(true);
+        }
+      } else if (autoStart) {
+        setRunning(true);
+      }
+      isInitializedRef.current = true;
+    }
+  }, [persistKey, autoStart]);
+
+  // Persist state whenever it changes
+  useEffect(() => {
+    if (isInitializedRef.current && persistKey && typeof window !== 'undefined') {
+      sessionStorage.setItem(
+        persistKey,
+        JSON.stringify({
+          accumulated: accumulatedRef.current,
+          startTime: startTimeRef.current,
+          running,
+        })
+      );
+    }
+  }, [elapsed, running, persistKey]);
 
   const tick = useCallback(() => {
     if (startTimeRef.current !== null) {

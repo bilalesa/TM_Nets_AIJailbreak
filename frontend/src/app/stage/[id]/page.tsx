@@ -71,7 +71,7 @@ export default function StagePage() {
 
   // ── Stopwatch ─────────────────────────────────────────────────────────────
   const { elapsed, formatted, running, start: startTimer, stop: stopTimer } =
-    useStopwatch(false);
+    useStopwatch(false, `stage-${stageId}-timer`);
   // Redirect invalid stage ids after hooks are initialized.
   useEffect(() => {
     if (invalidStage) {
@@ -128,10 +128,32 @@ export default function StagePage() {
     loadPlayer();
   }, [stageId, router]);
 
-  // ── 2. Seed the opening bot message ──────────────────────────────────────
+  // ── 2. Load or seed messages ──────────────────────────────────────
   useEffect(() => {
     if (!stageConfig) return;
 
+    if (typeof window !== 'undefined') {
+      const savedMessages = sessionStorage.getItem(`stage-${stageId}-messages`);
+      const savedTimerStarted = sessionStorage.getItem(`stage-${stageId}-timerStarted`);
+
+      if (savedTimerStarted === 'true') {
+        setTimerStarted(true);
+      }
+
+      if (savedMessages) {
+        try {
+          const parsed = JSON.parse(savedMessages);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+            return;
+          }
+        } catch (e) {
+          console.error('Failed to parse saved messages:', e);
+        }
+      }
+    }
+
+    // Seed opening message if no saved messages or parsing failed
     setMessages([
       {
         id: uid(),
@@ -141,6 +163,20 @@ export default function StagePage() {
       },
     ]);
   }, [stageId, stageConfig]);
+
+  // Persist messages across reloads
+  useEffect(() => {
+    if (messages.length > 0 && typeof window !== 'undefined') {
+      sessionStorage.setItem(`stage-${stageId}-messages`, JSON.stringify(messages));
+    }
+  }, [messages, stageId]);
+
+  // Persist timer start state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(`stage-${stageId}-timerStarted`, String(timerStarted));
+    }
+  }, [timerStarted, stageId]);
 
   // ── 3. Auto-scroll ────────────────────────────────────────────────────────
   useEffect(() => {

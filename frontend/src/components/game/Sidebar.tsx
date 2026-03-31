@@ -319,6 +319,9 @@ export default function Sidebar({
         isOpen={showExitModal}
         onClose={() => setShowExitModal(false)}
         onConfirm={() => {
+          if (typeof window !== 'undefined') {
+            sessionStorage.clear();
+          }
           router.push('/');
         }}
       />
