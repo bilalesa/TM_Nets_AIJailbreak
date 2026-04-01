@@ -15,6 +15,7 @@ const PORT = Number(process.env.PORT || 3001);
 const requestTimeoutMs = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const headersTimeoutMs = Number(process.env.HEADERS_TIMEOUT_MS || 16000);
 const keepAliveTimeoutMs = Number(process.env.KEEP_ALIVE_TIMEOUT_MS || 5000);
+const gameplayRateLimitPerMin = Number(process.env.GAMEPLAY_RATE_LIMIT_PER_MIN || 120);
 const configuredCorsOrigins = (process.env.CORS_ORIGINS || '')
 	.split(',')
 	.map((origin) => origin.trim())
@@ -63,7 +64,7 @@ const authLimiter = rateLimit({
 
 const gameplayLimiter = rateLimit({
 	windowMs: 60 * 1000,
-	max: 30,
+	max: gameplayRateLimitPerMin,
 	standardHeaders: true,
 	legacyHeaders: false,
 });

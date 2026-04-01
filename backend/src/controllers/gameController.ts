@@ -1,13 +1,13 @@
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import {
-  generateAIChatResponse,
   generateAIResponse,
   LLMOverloadedError,
   LLMTimeoutError,
 } from '../services/llmService.js';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import { embedText, isPromptTooSimilar } from '../services/embeddingService.js';
+import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
 
 export const submitPrompt = async (req: Request, res: Response) => {
   try {
@@ -156,25 +156,15 @@ export const chatPrompt = async (req: Request, res: Response) => {
       console.warn('[chatPrompt] Embedding failed, skipping anti-cheat:', embeddingError);
     }
 
-    const history = messages.slice(-10);
-    const aiResponse = await generateAIChatResponse(stageConfig.systemPrompt, history, userMessage);
+    const chatJob = await enqueueChatJob({
+      playerId: user.id,
+      stageNumber,
+      userMessage,
+      messages,
+      embedding,
+    });
 
-    supabase
-      .from('prompt_logs')
-      .insert({
-        player_id: user.id,
-        stage_number: stageNumber,
-        prompt_text: userMessage,
-        ai_response: aiResponse,
-        is_successful: false,
-        is_blocked_by_anticheat: false,
-        embedding: embedding ?? null,
-      })
-      .then(({ error }) => {
-        if (error) console.error('[prompt_logs insert]', error);
-      });
-
-    return res.json({ response: aiResponse });
+    return res.json({ jobId: chatJob.id, status: 'queued' });
   } catch (error: unknown) {
     if (error instanceof LLMOverloadedError) {
       return res.status(503).json({ error: 'Service busy. Please retry in a few seconds.' });
@@ -186,5 +176,63 @@ export const chatPrompt = async (req: Request, res: Response) => {
 
     console.error('Game Chat Error:', error);
     return res.status(500).json({ error: 'An error occurred while processing your chat request.' });
+  }
+};
+
+export const getChatResult = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const rawJobId = req.params.jobId;
+    const jobId = Array.isArray(rawJobId) ? rawJobId[0] : rawJobId;
+    if (!jobId) {
+      return res.status(400).json({ error: 'Job ID is required' });
+    }
+
+    const job = await llmQueue.getJob(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    const payload = job.data as { playerId?: string };
+    if (payload.playerId !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const state = await job.getState();
+    if (state === 'completed') {
+      const result = job.returnvalue as { response?: string } | undefined;
+      return res.json({ status: 'completed', response: result?.response || 'No response received.' });
+    }
+
+    if (state === 'failed') {
+      return res.status(500).json({ status: 'failed', error: job.failedReason || 'Job failed' });
+    }
+
+    return res.status(202).json({ status: state });
+  } catch (error: unknown) {
+    console.error('Game Chat Result Error:', error);
+    return res.status(500).json({ error: 'Failed to get chat result.' });
+  }
+};
+
+export const getChatQueueHealth = async (req: Request, res: Response) => {
+  try {
+    const monitorApiKey = process.env.MONITOR_API_KEY;
+    if (monitorApiKey) {
+      const provided = req.headers['x-monitor-key'];
+      if (provided !== monitorApiKey) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+    }
+
+    const metrics = await getQueueMetrics();
+    return res.json(metrics);
+  } catch (error: unknown) {
+    console.error('Game Chat Queue Health Error:', error);
+    return res.status(500).json({ error: 'Failed to get queue health.' });
   }
 };

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 
 const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+const fallbackModel = process.env.LLM_FALLBACK_MODEL?.trim() || '';
 const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
 const baseURL = process.env.LLM_API_ENDPOINT || undefined;
 const DEFAULT_MAX_TOKENS = 500;
@@ -19,6 +20,7 @@ const llmTimeoutMs = toPositiveInt(process.env.LLM_TIMEOUT_MS, DEFAULT_TIMEOUT_M
 const maxConcurrency = toPositiveInt(process.env.LLM_MAX_CONCURRENT_REQUESTS, DEFAULT_MAX_CONCURRENCY);
 const maxQueueSize = toPositiveInt(process.env.LLM_MAX_QUEUE_SIZE, DEFAULT_MAX_QUEUE_SIZE);
 const maxQueueWaitMs = toPositiveInt(process.env.LLM_MAX_QUEUE_WAIT_MS, DEFAULT_MAX_QUEUE_WAIT_MS);
+const fallbackTimeoutMs = toPositiveInt(process.env.LLM_FALLBACK_TIMEOUT_MS, Math.max(10000, llmTimeoutMs - 5000));
 
 let inFlightRequests = 0;
 const waitQueue: Array<{
@@ -36,6 +38,13 @@ export class LLMTimeoutError extends Error {
   constructor(message = 'LLM request timed out.') {
     super(message);
     this.name = 'LLMTimeoutError';
+  }
+}
+
+export class LLMEmptyResponseError extends Error {
+  constructor(message = 'LLM returned an empty response.') {
+    super(message);
+    this.name = 'LLMEmptyResponseError';
   }
 }
 
@@ -86,42 +95,89 @@ const openai = new OpenAI({
   maxRetries: 1,
 });
 
-export async function generateAIResponse(systemPrompt: string, userPrompt: string): Promise<string> {
-  if (!apiKey) {
-    throw new Error('LLM API key is not configured. Set LLM_API_KEY or OPENAI_API_KEY.');
+function isRetryableLLMError(error: unknown): boolean {
+  if (error instanceof LLMTimeoutError || error instanceof LLMEmptyResponseError) {
+    return true;
   }
 
-  await acquireSlot();
+  if (error && typeof error === 'object' && 'status' in error) {
+    const status = Number((error as { status?: unknown }).status);
+    return status === 408 || status === 409 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  }
+
+  return false;
+}
+
+async function createCompletionWithTimeout(
+  targetModel: string,
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  timeoutMs: number,
+): Promise<string> {
   let timeoutHandle: NodeJS.Timeout | undefined;
 
   try {
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
       timeoutHandle = setTimeout(() => {
         reject(new LLMTimeoutError());
-      }, llmTimeoutMs);
+      }, timeoutMs);
       timeoutHandle.unref?.();
     });
 
     const completionPromise = openai.chat.completions.create({
-      model,
+      model: targetModel,
       temperature: 0.8,
       max_tokens: maxTokens,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
+      messages,
     });
 
     const completion = await Promise.race([completionPromise, timeoutPromise]);
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
+    const text = completion.choices?.[0]?.message?.content?.trim() || '';
+
+    if (!text) {
+      throw new LLMEmptyResponseError();
     }
 
-    return completion.choices?.[0]?.message?.content?.trim() || 'No response received.';
+    return text;
   } finally {
     if (timeoutHandle) {
       clearTimeout(timeoutHandle);
     }
+  }
+}
+
+async function createCompletionWithFallback(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+): Promise<string> {
+  try {
+    return await createCompletionWithTimeout(model, messages, llmTimeoutMs);
+  } catch (primaryError) {
+    if (!fallbackModel || !isRetryableLLMError(primaryError)) {
+      throw primaryError;
+    }
+
+    console.warn('[llm] primary model failed, trying fallback model', {
+      primaryModel: model,
+      fallbackModel,
+      reason: primaryError instanceof Error ? primaryError.name : 'unknown',
+    });
+
+    return createCompletionWithTimeout(fallbackModel, messages, fallbackTimeoutMs);
+  }
+}
+
+export async function generateAIResponse(systemPrompt: string, userPrompt: string): Promise<string> {
+  if (!apiKey) {
+    throw new Error('LLM API key is not configured. Set LLM_API_KEY or OPENAI_API_KEY.');
+  }
+
+  await acquireSlot();
+
+  try {
+    return await createCompletionWithFallback([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+  } finally {
     releaseSlot();
   }
 }
@@ -136,33 +192,14 @@ export async function generateAIChatResponse(
   }
 
   await acquireSlot();
-  let timeoutHandle: NodeJS.Timeout | undefined;
 
   try {
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      timeoutHandle = setTimeout(() => {
-        reject(new LLMTimeoutError());
-      }, llmTimeoutMs);
-      timeoutHandle.unref?.();
-    });
-
-    const completionPromise = openai.chat.completions.create({
-      model,
-      temperature: 0.8,
-      max_tokens: maxTokens,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...history,
-        { role: 'user', content: userPrompt },
-      ],
-    });
-
-    const completion = await Promise.race([completionPromise, timeoutPromise]);
-    return completion.choices?.[0]?.message?.content?.trim() || 'No response received.';
+    return await createCompletionWithFallback([
+      { role: 'system', content: systemPrompt },
+      ...history,
+      { role: 'user', content: userPrompt },
+    ]);
   } finally {
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-    }
     releaseSlot();
   }
 }

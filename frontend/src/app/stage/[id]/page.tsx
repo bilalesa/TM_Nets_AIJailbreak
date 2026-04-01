@@ -239,6 +239,61 @@ export default function StagePage() {
         return;
       }
 
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: 'bot',
+            content: data.error || 'Unable to process message right now. Please try again.',
+            timestamp: Date.now(),
+          },
+        ]);
+        return;
+      }
+
+      if (data.jobId) {
+        const maxPollAttempts = 60;
+        let polledResponse: string | null = null;
+
+        for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+          const resultRes = await fetch(`/api/game/chat/result/${data.jobId}`, {
+            method: 'GET',
+            cache: 'no-store',
+          });
+
+          const resultData = await resultRes.json();
+
+          if (resultRes.ok && resultData.status === 'completed') {
+            polledResponse = resultData.response || 'No response received.';
+            break;
+          }
+
+          if (resultData.status === 'failed') {
+            polledResponse = resultData.error || 'AI request failed. Please try again.';
+            break;
+          }
+
+          if (resultRes.status !== 202) {
+            polledResponse = resultData.error || 'AI service unavailable. Please retry.';
+            break;
+          }
+
+          const pollDelayMs = Math.min(1800, 600 + attempt * 20);
+          await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
+        }
+
+        const botMsg: Message = {
+          id: uid(),
+          role: 'bot',
+          content: polledResponse || 'AI is still thinking. Please send again in a moment.',
+          timestamp: Date.now(),
+        };
+
+        setMessages((prev) => [...prev, botMsg]);
+        return;
+      }
+
       const botMsg: Message = {
         id: uid(),
         role: 'bot',
