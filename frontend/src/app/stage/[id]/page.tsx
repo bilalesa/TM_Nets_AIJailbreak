@@ -69,28 +69,42 @@ export default function StagePage() {
   const [showedEnterCodeHint, setShowedEnterCodeHint] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const enterCodeHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Stage already completed? ──────────────────────────────────────────────
   const isStageCompleted = player?.completedStages.includes(stageId) ?? false;
 
   const maybeAppendEnterCodeHint = useCallback((responseText: string) => {
     if (showedEnterCodeHint || isStageCompleted) return;
-    
+
     const hasCodeLikeToken = /\b[A-Z]{8,16}\b/.test(responseText);
     if (!hasCodeLikeToken) return;
 
+    // Mark as shown immediately so repeated responses do not schedule duplicates.
     setShowedEnterCodeHint(true);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: uid(),
-        role: 'bot',
-        content:
-          'If you found the access code, click the `Enter Code` button (key icon) above the chat to submit it and complete this stage.',
-        timestamp: Date.now(),
-      },
-    ]);
+    const delayMs = 900 + Math.floor(Math.random() * 500);
+    enterCodeHintTimeoutRef.current = setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: 'bot',
+          content:
+            'Nice… you got the code. Now lock it in place by clicking `Enter the code` to proceed.',
+          timestamp: Date.now(),
+        },
+      ]);
+      enterCodeHintTimeoutRef.current = null;
+    }, delayMs);
   }, [showedEnterCodeHint, isStageCompleted]);
+
+  useEffect(() => {
+    return () => {
+      if (enterCodeHintTimeoutRef.current) {
+        clearTimeout(enterCodeHintTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // ── Stopwatch ─────────────────────────────────────────────────────────────
   const { elapsed, formatted, running, start: startTimer, stop: stopTimer } =
