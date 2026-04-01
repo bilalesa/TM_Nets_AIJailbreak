@@ -66,8 +66,31 @@ export default function StagePage() {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
+  const [showedEnterCodeHint, setShowedEnterCodeHint] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // ── Stage already completed? ──────────────────────────────────────────────
+  const isStageCompleted = player?.completedStages.includes(stageId) ?? false;
+
+  const maybeAppendEnterCodeHint = useCallback((responseText: string) => {
+    if (showedEnterCodeHint || isStageCompleted) return;
+    
+    const hasCodeLikeToken = /\b[A-Z]{8,16}\b/.test(responseText);
+    if (!hasCodeLikeToken) return;
+
+    setShowedEnterCodeHint(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: 'bot',
+        content:
+          'If you found the access code, click the `Enter Code` button (key icon) above the chat to submit it and complete this stage.',
+        timestamp: Date.now(),
+      },
+    ]);
+  }, [showedEnterCodeHint, isStageCompleted]);
 
   // ── Stopwatch ─────────────────────────────────────────────────────────────
   const { elapsed, formatted, running, start: startTimer, stop: stopTimer } =
@@ -89,9 +112,6 @@ export default function StagePage() {
     timeBonus: number;
     baseXP: number;
   } | null>(null);
-
-  // ── Stage already completed? ──────────────────────────────────────────────
-  const isStageCompleted = player?.completedStages.includes(stageId) ?? false;
 
   // ── 1. Load player on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -291,6 +311,7 @@ export default function StagePage() {
         };
 
         setMessages((prev) => [...prev, botMsg]);
+        maybeAppendEnterCodeHint(botMsg.content);
         return;
       }
 
@@ -302,6 +323,7 @@ export default function StagePage() {
       };
 
       setMessages((prev) => [...prev, botMsg]);
+      maybeAppendEnterCodeHint(botMsg.content);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -316,7 +338,7 @@ export default function StagePage() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [input, isSending, isStageCompleted, timerStarted, startTimer, messages, stageId]);
+  }, [input, isSending, isStageCompleted, timerStarted, startTimer, messages, stageId, maybeAppendEnterCodeHint]);
 
   // ── 5. Handle stage success ───────────────────────────────────────────────
   const handleCodeSuccess = useCallback(
