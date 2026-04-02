@@ -112,7 +112,7 @@ export default function StagePage() {
   // Redirect invalid stage ids after hooks are initialized.
   useEffect(() => {
     if (invalidStage) {
-      router.replace('/dashboard');
+      router.replace('/stage');
     }
   }, [invalidStage, router]);
 
@@ -144,7 +144,7 @@ export default function StagePage() {
           stageId === 1 || completed.includes(stageId - 1);
 
         if (!isUnlocked) {
-          router.replace('/dashboard');
+          router.replace('/stage');
           return;
         }
 
