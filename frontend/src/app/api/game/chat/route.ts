@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getBackendBaseUrl } from '@/lib/backendUrl';
 
+async function parseBackendPayload(response: Response): Promise<Record<string, unknown>> {
+  const contentType = response.headers.get('content-type') || '';
+  const raw = await response.text();
+
+  if (!raw) {
+    return { error: 'Backend returned an empty response.' };
+  }
+
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    const preview = raw.slice(0, 240);
+    return {
+      error: 'Backend returned an invalid JSON response.',
+      upstreamContentType: contentType || 'unknown',
+      upstreamBodyPreview: preview,
+    };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies();
@@ -24,10 +44,16 @@ export async function POST(request: NextRequest) {
       cache: 'no-store',
     });
 
-    const data = await backendRes.json();
+    const data = await parseBackendPayload(backendRes);
+    const retryAfter = backendRes.headers.get('retry-after');
+
     return NextResponse.json(data, {
       status: backendRes.status,
-      headers: backendRes.status === 503 ? { 'Retry-After': '2' } : undefined,
+      headers: retryAfter
+        ? { 'Retry-After': retryAfter }
+        : backendRes.status === 503
+          ? { 'Retry-After': '2' }
+          : undefined,
     });
   } catch (error: unknown) {
     console.error('[/api/game/chat proxy]', error);

@@ -9,6 +9,19 @@ import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import { embedText, isPromptTooSimilar } from '../services/embeddingService.js';
 import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
 
+function sendError(
+  res: Response,
+  status: number,
+  error: string,
+  options?: { retryable?: boolean; code?: string },
+) {
+  return res.status(status).json({
+    error,
+    retryable: options?.retryable ?? false,
+    errorCode: options?.code,
+  });
+}
+
 export const submitPrompt = async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -120,13 +133,19 @@ export const chatPrompt = async (req: Request, res: Response) => {
         .maybeSingle();
 
       if (!prevCompletion) {
-        return res.status(403).json({ error: 'Previous stage not completed' });
+        return sendError(res, 403, 'Previous stage not completed', {
+          retryable: false,
+          code: 'PREVIOUS_STAGE_NOT_COMPLETED',
+        });
       }
     }
 
     const stageConfig = SERVER_STAGE_CONFIGS[stageNumber - 1];
     if (!stageConfig) {
-      return res.status(404).json({ error: 'Stage not found.' });
+      return sendError(res, 404, 'Stage not found.', {
+        retryable: false,
+        code: 'STAGE_NOT_FOUND',
+      });
     }
 
     let embedding: number[] | null = null;
@@ -167,15 +186,24 @@ export const chatPrompt = async (req: Request, res: Response) => {
     return res.json({ jobId: chatJob.id, status: 'queued' });
   } catch (error: unknown) {
     if (error instanceof LLMOverloadedError) {
-      return res.status(503).json({ error: 'Service busy. Please retry in a few seconds.' });
+      return sendError(res, 503, 'Service busy. Please retry in a few seconds.', {
+        retryable: true,
+        code: 'LLM_OVERLOADED',
+      });
     }
 
     if (error instanceof LLMTimeoutError) {
-      return res.status(504).json({ error: 'AI service timed out. Please try again.' });
+      return sendError(res, 504, 'AI service timed out. Please try again.', {
+        retryable: true,
+        code: 'LLM_TIMEOUT',
+      });
     }
 
     console.error('Game Chat Error:', error);
-    return res.status(500).json({ error: 'An error occurred while processing your chat request.' });
+    return sendError(res, 500, 'An error occurred while processing your chat request.', {
+      retryable: true,
+      code: 'CHAT_REQUEST_FAILED',
+    });
   }
 };
 
@@ -189,17 +217,26 @@ export const getChatResult = async (req: Request, res: Response) => {
     const rawJobId = req.params.jobId;
     const jobId = Array.isArray(rawJobId) ? rawJobId[0] : rawJobId;
     if (!jobId) {
-      return res.status(400).json({ error: 'Job ID is required' });
+      return sendError(res, 400, 'Job ID is required', {
+        retryable: false,
+        code: 'JOB_ID_REQUIRED',
+      });
     }
 
     const job = await llmQueue.getJob(jobId);
     if (!job) {
-      return res.status(404).json({ error: 'Job not found' });
+      return sendError(res, 404, 'Job not found', {
+        retryable: false,
+        code: 'JOB_NOT_FOUND',
+      });
     }
 
     const payload = job.data as { playerId?: string };
     if (payload.playerId !== user.id) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return sendError(res, 403, 'Forbidden', {
+        retryable: false,
+        code: 'FORBIDDEN',
+      });
     }
 
     const state = await job.getState();
@@ -209,13 +246,31 @@ export const getChatResult = async (req: Request, res: Response) => {
     }
 
     if (state === 'failed') {
-      return res.status(500).json({ status: 'failed', error: job.failedReason || 'Job failed' });
+      const failedReason = job.failedReason || 'Job failed';
+      const failedLower = failedReason.toLowerCase();
+      const retryable =
+        failedLower.includes('timeout')
+        || failedLower.includes('overload')
+        || failedLower.includes('429')
+        || failedLower.includes('502')
+        || failedLower.includes('503')
+        || failedLower.includes('504');
+
+      return res.status(500).json({
+        status: 'failed',
+        error: failedReason,
+        retryable,
+        errorCode: retryable ? 'CHAT_JOB_FAILED_RETRYABLE' : 'CHAT_JOB_FAILED',
+      });
     }
 
     return res.status(202).json({ status: state });
   } catch (error: unknown) {
     console.error('Game Chat Result Error:', error);
-    return res.status(500).json({ error: 'Failed to get chat result.' });
+    return sendError(res, 500, 'Failed to get chat result.', {
+      retryable: true,
+      code: 'CHAT_RESULT_FAILED',
+    });
   }
 };
 

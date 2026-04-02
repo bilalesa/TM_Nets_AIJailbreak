@@ -26,6 +26,44 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
+  try {
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function mapApiErrorToPlayerMessage(status: number, rawError?: string, retryable?: boolean): string {
+  const error = (rawError || '').trim();
+
+  if (retryable) {
+    return 'The AI agent may be overloaded right now. Please try sending your prompt again in a few seconds.';
+  }
+
+  if (status === 401) {
+    return 'Your session has expired. Please sign in again.';
+  }
+
+  if (status === 403) {
+    return 'This stage is currently locked. Complete previous stages first.';
+  }
+
+  if (status === 404) {
+    return 'We could not find this request result. Please send your prompt again.';
+  }
+
+  if (status === 429) {
+    return 'High traffic right now. Please wait a few seconds and send again.';
+  }
+
+  if (status === 503 || status === 502 || status === 504 || status === 500) {
+    return 'The AI agent may be overloaded right now. Please try sending your prompt again in a few seconds.';
+  }
+
+  return error || 'Unable to process your message right now. Please try again.';
+}
+
 // ─── Player state interface ───────────────────────────────────────────────────
 interface PlayerState {
   username: string;
@@ -259,7 +297,14 @@ export default function StagePage() {
         }),
       });
 
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
+      const errorText = typeof data.error === 'string' ? data.error : '';
+      const retryable = typeof data.retryable === 'boolean' ? data.retryable : undefined;
+      const directResponse = typeof data.response === 'string' ? data.response : '';
+      const jobId =
+        typeof data.jobId === 'string' || typeof data.jobId === 'number'
+          ? String(data.jobId)
+          : '';
 
       if (res.status === 429) {
         setMessages((prev) => [
@@ -280,41 +325,49 @@ export default function StagePage() {
           {
             id: uid(),
             role: 'bot',
-            content: data.error || 'Unable to process message right now. Please try again.',
+            content: mapApiErrorToPlayerMessage(res.status, errorText, retryable),
             timestamp: Date.now(),
           },
         ]);
         return;
       }
 
-      if (data.jobId) {
+      if (jobId) {
         const maxPollAttempts = 60;
         let polledResponse: string | null = null;
+        const transientStatuses = new Set([429, 500, 502, 503, 504]);
 
         for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-          const resultRes = await fetch(`/api/game/chat/result/${data.jobId}`, {
+          const resultRes = await fetch(`/api/game/chat/result/${jobId}`, {
             method: 'GET',
             cache: 'no-store',
           });
 
-          const resultData = await resultRes.json();
+          const resultData = await parseJsonSafe(resultRes);
+          const status = typeof resultData.status === 'string' ? resultData.status : '';
+          const responseText =
+            typeof resultData.response === 'string' ? resultData.response : '';
+          const errorText = typeof resultData.error === 'string' ? resultData.error : '';
+          const retryable =
+            typeof resultData.retryable === 'boolean' ? resultData.retryable : undefined;
 
-          if (resultRes.ok && resultData.status === 'completed') {
-            polledResponse = resultData.response || 'No response received.';
+          if (resultRes.ok && status === 'completed') {
+            polledResponse = responseText || 'No response received.';
             break;
           }
 
-          if (resultData.status === 'failed') {
-            polledResponse = resultData.error || 'AI request failed. Please try again.';
+          if (status === 'failed') {
+            polledResponse = mapApiErrorToPlayerMessage(resultRes.status, errorText, retryable);
             break;
           }
 
-          if (resultRes.status !== 202) {
-            polledResponse = resultData.error || 'AI service unavailable. Please retry.';
+          if (resultRes.status !== 202 && !transientStatuses.has(resultRes.status)) {
+            polledResponse = mapApiErrorToPlayerMessage(resultRes.status, errorText, retryable);
             break;
           }
 
-          const pollDelayMs = Math.min(1800, 600 + attempt * 20);
+          // Retry transient errors while the queue or provider recovers.
+          const pollDelayMs = Math.min(2200, 650 + attempt * 25);
           await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
         }
 
@@ -333,7 +386,7 @@ export default function StagePage() {
       const botMsg: Message = {
         id: uid(),
         role: 'bot',
-        content: data.response || 'No response received.',
+        content: directResponse || 'No response received.',
         timestamp: Date.now(),
       };
 

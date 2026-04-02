@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getBackendBaseUrl } from '@/lib/backendUrl';
 
+async function parseBackendPayload(response: Response): Promise<Record<string, unknown>> {
+  const contentType = response.headers.get('content-type') || '';
+  const raw = await response.text();
+
+  if (!raw) {
+    return { error: 'Backend returned an empty response.' };
+  }
+
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    const preview = raw.slice(0, 240);
+    return {
+      error: 'Backend returned an invalid JSON response.',
+      upstreamContentType: contentType || 'unknown',
+      upstreamBodyPreview: preview,
+    };
+  }
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> },
@@ -25,7 +45,7 @@ export async function GET(
       cache: 'no-store',
     });
 
-    const data = await backendRes.json();
+    const data = await parseBackendPayload(backendRes);
     return NextResponse.json(data, { status: backendRes.status });
   } catch (error: unknown) {
     console.error('[/api/game/chat/result/:jobId proxy]', error);
