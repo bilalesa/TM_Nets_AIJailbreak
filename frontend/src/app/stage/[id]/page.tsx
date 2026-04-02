@@ -245,7 +245,8 @@ export default function StagePage() {
       .map((m) => ({
         role: m.role === 'bot' ? ('assistant' as const) : ('user' as const),
         content: m.content,
-      }));
+      }))
+      .slice(-20);
 
     try {
       const res = await fetch('/api/game/chat', {

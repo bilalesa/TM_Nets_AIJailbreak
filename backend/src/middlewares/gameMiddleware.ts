@@ -76,11 +76,12 @@ export function validateGameChatRequest(req: Request, res: Response, next: NextF
     return res.status(400).json({ error: `Message too long (max ${MAX_PROMPT_LENGTH} characters)` });
   }
 
-  if (!Array.isArray(messages) || messages.length > MAX_MESSAGES_PAYLOAD) {
+  if (!Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid chat history' });
   }
 
   const parsedMessages = messages
+    .slice(-MAX_MESSAGES_PAYLOAD)
     .filter(
       (msg): msg is { role: 'user' | 'assistant'; content: string } =>
         typeof msg === 'object'
