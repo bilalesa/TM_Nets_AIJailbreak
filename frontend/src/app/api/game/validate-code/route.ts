@@ -11,6 +11,7 @@ import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
 import { computeTimeBonus } from '@/lib/avatar';
+import { calculateHintPenalty, sanitizeHintUsage } from '@/lib/hintPenalty';
 import { embedText, saveWinningPrompt } from '@/lib/embeddings';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
 
@@ -59,10 +60,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Parse body
-    const { stageNumber, code, elapsedSeconds } = (await request.json()) as {
+    const { stageNumber, code, elapsedSeconds, hintUsage } = (await request.json()) as {
       stageNumber?: unknown;
       code?: unknown;
       elapsedSeconds?: unknown;
+      hintUsage?: unknown;
     };
 
     if (!Number.isInteger(stageNumber)) {
@@ -111,7 +113,10 @@ export async function POST(request: NextRequest) {
 
     // 5. Compute score: baseXP + time bonus
     const timeBonus = computeTimeBonus(elapsedSecondsSafe, stageConfig.baseXP);
-    const scoreAwarded = stageConfig.baseXP + timeBonus;
+    const grossScore = stageConfig.baseXP + timeBonus;
+    const sanitizedHintUsage = sanitizeHintUsage(hintUsage);
+    const penalty = calculateHintPenalty(stageConfig.baseXP, grossScore, sanitizedHintUsage);
+    const scoreAwarded = Math.max(1, grossScore - penalty.points);
 
     // 6. Record completion
     const { error: completionError } = await supabase
@@ -211,7 +216,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       correct: true,
       scoreAwarded,
+      grossScore,
       timeBonus,
+      hintPenalty: penalty.points,
+      hintPenaltyLevel: penalty.appliedLevel,
+      hintCountUsed: penalty.totalHintsUsed,
       baseXP: stageConfig.baseXP,
     });
   } catch (error: unknown) {

@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STAGE_CONFIGS } from '@/lib/stageConfig';
-import { buildDynamicStageHint } from '@/lib/dynamicHint';
+import { buildDynamicStageHint, type HintLevel } from '@/lib/dynamicHint';
+import type { HintUsageSummary } from '@/lib/hintPenalty';
 import { useStopwatch } from '@/hooks/useStopwatch';
 import Sidebar from '@/components/game/Sidebar';
 import EnterCodeModal from '@/components/game/EnterCodeModal';
@@ -71,6 +72,12 @@ function formatHintLevel(level: 'mild' | 'medium' | 'direct'): string {
   return 'Mild';
 }
 
+const EMPTY_HINT_USAGE: HintUsageSummary = {
+  mild: 0,
+  medium: 0,
+  direct: 0,
+};
+
 // ─── Player state interface ───────────────────────────────────────────────────
 interface PlayerState {
   username: string;
@@ -113,6 +120,7 @@ export default function StagePage() {
   const [timerStarted, setTimerStarted] = useState(false);
   const [showedEnterCodeHint, setShowedEnterCodeHint] = useState(false);
   const [shownHintKeys, setShownHintKeys] = useState<string[]>([]);
+  const [hintUsage, setHintUsage] = useState<HintUsageSummary>(EMPTY_HINT_USAGE);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const enterCodeHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -171,6 +179,8 @@ export default function StagePage() {
     scoreAwarded: number;
     timeBonus: number;
     baseXP: number;
+    hintPenalty: number;
+    grossScore: number;
   } | null>(null);
 
   // ── 1. Load player on mount ───────────────────────────────────────────────
@@ -284,6 +294,32 @@ export default function StagePage() {
     if (typeof window === 'undefined') return;
     sessionStorage.setItem(`stage-${stageId}-hintHistory`, JSON.stringify(shownHintKeys));
   }, [shownHintKeys, stageId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const raw = sessionStorage.getItem(`stage-${stageId}-hintUsage`);
+    if (!raw) {
+      setHintUsage(EMPTY_HINT_USAGE);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      setHintUsage({
+        mild: typeof parsed?.mild === 'number' ? Math.max(0, Math.floor(parsed.mild)) : 0,
+        medium: typeof parsed?.medium === 'number' ? Math.max(0, Math.floor(parsed.medium)) : 0,
+        direct: typeof parsed?.direct === 'number' ? Math.max(0, Math.floor(parsed.direct)) : 0,
+      });
+    } catch {
+      setHintUsage(EMPTY_HINT_USAGE);
+    }
+  }, [stageId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem(`stage-${stageId}-hintUsage`, JSON.stringify(hintUsage));
+  }, [hintUsage, stageId]);
 
   // ── 3. Auto-scroll ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -445,9 +481,9 @@ export default function StagePage() {
 
   // ── 5. Handle stage success ───────────────────────────────────────────────
   const handleCodeSuccess = useCallback(
-    (scoreAwarded: number, timeBonus: number, baseXP: number) => {
+    (scoreAwarded: number, timeBonus: number, baseXP: number, hintPenalty: number, grossScore: number) => {
       stopTimer();
-      setStageResult({ scoreAwarded, timeBonus, baseXP });
+      setStageResult({ scoreAwarded, timeBonus, baseXP, hintPenalty, grossScore });
       setShowStageComplete(true);
 
       // Update local player state
@@ -485,6 +521,13 @@ export default function StagePage() {
     });
 
     setShownHintKeys((prev) => (prev.includes(hint.key) ? prev : [...prev, hint.key]));
+    setHintUsage((prev) => {
+      const level = hint.level as HintLevel;
+      return {
+        ...prev,
+        [level]: prev[level] + 1,
+      };
+    });
 
     setMessages((prev) => [
       ...prev,
@@ -807,6 +850,7 @@ export default function StagePage() {
         onClose={() => setShowEnterCode(false)}
         stageNumber={stageId}
         elapsedSeconds={elapsed}
+        hintUsage={hintUsage}
 
         onSuccess={handleCodeSuccess}
       />
@@ -822,6 +866,8 @@ export default function StagePage() {
         stageNumber={stageId}
         baseXP={stageResult?.baseXP ?? stageConfig.baseXP}
         timeBonus={stageResult?.timeBonus ?? 0}
+        hintPenalty={stageResult?.hintPenalty ?? 0}
+        grossScore={stageResult?.grossScore ?? stageConfig.baseXP}
         totalAwarded={stageResult?.scoreAwarded ?? stageConfig.baseXP}
         elapsedSeconds={elapsed}
         isLastStage={stageId === 5}

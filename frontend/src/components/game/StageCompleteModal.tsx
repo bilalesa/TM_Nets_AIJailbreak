@@ -8,6 +8,8 @@ interface StageCompleteModalProps {
   stageNumber: number;
   baseXP: number;
   timeBonus: number;
+  hintPenalty: number;
+  grossScore: number;
   totalAwarded: number;
   elapsedSeconds: number;
   isLastStage: boolean;
@@ -26,6 +28,8 @@ export default function StageCompleteModal({
   stageNumber,
   baseXP,
   timeBonus,
+  hintPenalty,
+  grossScore,
   totalAwarded,
   elapsedSeconds,
   isLastStage,
@@ -92,6 +96,16 @@ export default function StageCompleteModal({
                       Speed bonus ({formatTime(elapsedSeconds)})
                     </span>
                     <span className="font-semibold text-sm sm:text-base text-[#2F6F5E]">+{timeBonus} XP</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs sm:text-sm text-gray-500">
+                      Hint penalty
+                    </span>
+                    <span className="font-semibold text-sm sm:text-base text-[#9B1C1C]">-{hintPenalty} XP</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs sm:text-sm text-gray-500">Subtotal before penalty</span>
+                    <span className="font-semibold text-sm sm:text-base text-gray-700">+{grossScore} XP</span>
                   </div>
                   <div className="border-t border-gray-100 pt-2.5 flex items-center justify-between">
                     <span className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-700">

@@ -4,13 +4,21 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { KeyRound, X, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { HintUsageSummary } from '@/lib/hintPenalty';
 
 interface EnterCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
   stageNumber: number;
   elapsedSeconds: number;
-  onSuccess: (scoreAwarded: number, timeBonus: number, baseXP: number) => void;
+  hintUsage: HintUsageSummary;
+  onSuccess: (
+    scoreAwarded: number,
+    timeBonus: number,
+    baseXP: number,
+    hintPenalty: number,
+    grossScore: number,
+  ) => void;
 }
 
 type SubmitStatus = 'idle' | 'loading' | 'correct' | 'incorrect';
@@ -20,6 +28,7 @@ export default function EnterCodeModal({
   onClose,
   stageNumber,
   elapsedSeconds,
+  hintUsage,
   onSuccess,
 }: EnterCodeModalProps) {
   const [code, setCode] = useState('');
@@ -40,6 +49,7 @@ export default function EnterCodeModal({
           stageNumber,
           code: code.trim(),
           elapsedSeconds,
+          hintUsage,
         }),
       });
 
@@ -54,7 +64,13 @@ export default function EnterCodeModal({
       if (data.correct) {
         setStatus('correct');
         setTimeout(() => {
-          onSuccess(data.scoreAwarded, data.timeBonus, data.baseXP);
+          onSuccess(
+            data.scoreAwarded,
+            data.timeBonus,
+            data.baseXP,
+            data.hintPenalty ?? 0,
+            data.grossScore ?? data.scoreAwarded,
+          );
           onClose();
           setCode('');
           setStatus('idle');
