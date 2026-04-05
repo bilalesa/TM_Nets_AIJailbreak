@@ -14,7 +14,6 @@ export interface Stage {
   name: string;
   subtitle: string;
   base_xp: number;
-  hint: string;
   scenario_description: string; // shown to user as flavour text
   is_locked: boolean;
   is_completed: boolean;

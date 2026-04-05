@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STAGE_CONFIGS } from '@/lib/stageConfig';
+import { buildDynamicStageHint } from '@/lib/dynamicHint';
 import { useStopwatch } from '@/hooks/useStopwatch';
 import Sidebar from '@/components/game/Sidebar';
 import EnterCodeModal from '@/components/game/EnterCodeModal';
@@ -64,6 +65,12 @@ function mapApiErrorToPlayerMessage(status: number, rawError?: string, retryable
   return error || 'Unable to process your message right now. Please try again.';
 }
 
+function formatHintLevel(level: 'mild' | 'medium' | 'direct'): string {
+  if (level === 'direct') return 'Direct';
+  if (level === 'medium') return 'Medium';
+  return 'Mild';
+}
+
 // ─── Player state interface ───────────────────────────────────────────────────
 interface PlayerState {
   username: string;
@@ -105,6 +112,7 @@ export default function StagePage() {
   const [isSending, setIsSending] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
   const [showedEnterCodeHint, setShowedEnterCodeHint] = useState(false);
+  const [shownHintKeys, setShownHintKeys] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const enterCodeHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -249,6 +257,33 @@ export default function StagePage() {
       sessionStorage.setItem(`stage-${stageId}-timerStarted`, String(timerStarted));
     }
   }, [timerStarted, stageId]);
+
+  // Persist dynamic hint history per stage so repeated hint clicks rotate guidance.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const raw = sessionStorage.getItem(`stage-${stageId}-hintHistory`);
+    if (!raw) {
+      setShownHintKeys([]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setShownHintKeys(parsed.filter((entry): entry is string => typeof entry === 'string'));
+      } else {
+        setShownHintKeys([]);
+      }
+    } catch {
+      setShownHintKeys([]);
+    }
+  }, [stageId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem(`stage-${stageId}-hintHistory`, JSON.stringify(shownHintKeys));
+  }, [shownHintKeys, stageId]);
 
   // ── 3. Auto-scroll ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -443,13 +478,20 @@ export default function StagePage() {
   // ── Handle hint click ─────────────────────────────────────────────────────
   const handleHint = () => {
     if (!stageConfig) return;
-    const hint = stageConfig.hint;
+    const hint = buildDynamicStageHint({
+      stageId,
+      messages,
+      usedHintKeys: shownHintKeys,
+    });
+
+    setShownHintKeys((prev) => (prev.includes(hint.key) ? prev : [...prev, hint.key]));
+
     setMessages((prev) => [
       ...prev,
       {
         id: uid(),
         role: 'bot',
-        content: `💡 Hint: ${hint}`,
+        content: `💡 ${formatHintLevel(hint.level)} hint: ${hint.text}`,
         timestamp: Date.now(),
       },
     ]);
