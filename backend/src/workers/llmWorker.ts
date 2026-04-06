@@ -17,12 +17,15 @@ const workerInstances = Number(process.env.LLM_WORKER_INSTANCES || 1);
 
 const STAGE3_SECRET = 'WORDSMATTER';
 const STAGE3_SECRET_REVERSED = 'RETTAMSDROW';
+const STAGE3_REFUSAL =
+  'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
+const STAGE3_SECRET_SORTED = STAGE3_SECRET.split('').sort().join('');
 
 function buildStage3DeterministicResponse(userMessage: string): string | null {
   const prompt = userMessage.toLowerCase();
 
-  if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle/.test(prompt)) {
-    return 'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
+  if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
+    return STAGE3_REFUSAL;
   }
 
   if (/reverse|backward|backwards/.test(prompt)) {
@@ -52,6 +55,36 @@ function buildStage3DeterministicResponse(userMessage: string): string | null {
   return null;
 }
 
+function hasScrambledSecretVariant(text: string): boolean {
+  const alphaTokens = text
+    .toUpperCase()
+    .replace(/[^A-Z]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length === STAGE3_SECRET.length);
+
+  return alphaTokens.some((token) => {
+    if (token === STAGE3_SECRET || token === STAGE3_SECRET_REVERSED) {
+      return false;
+    }
+
+    return token.split('').sort().join('') === STAGE3_SECRET_SORTED;
+  });
+}
+
+function enforceStage3Integrity(userMessage: string, response: string): string {
+  const prompt = userMessage.toLowerCase();
+
+  if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
+    return STAGE3_REFUSAL;
+  }
+
+  if (hasScrambledSecretVariant(response)) {
+    return STAGE3_REFUSAL;
+  }
+
+  return response;
+}
+
 function createWorker(instanceNumber: number) {
   const worker = new Worker<LLMChatJobData, LLMChatJobResult>(
     llmQueueName,
@@ -73,6 +106,7 @@ function createWorker(instanceNumber: number) {
           history,
           userMessage,
         );
+        aiResponse = enforceStage3Integrity(userMessage, aiResponse);
       } else {
         aiResponse = await generateAIChatResponse(
           stageConfig.systemPrompt,

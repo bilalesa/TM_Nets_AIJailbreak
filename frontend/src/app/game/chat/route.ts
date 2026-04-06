@@ -21,6 +21,12 @@ const LLM_ENDPOINT = `${process.env.LLM_API_ENDPOINT}/chat/completions`;
 const LLM_API_KEY  = process.env.LLM_API_KEY!;
 const LLM_MODEL    = process.env.LLM_MODEL ?? 'gpt-4o';
 
+const STAGE3_SECRET = 'WORDSMATTER';
+const STAGE3_SECRET_REVERSED = 'RETTAMSDROW';
+const STAGE3_REFUSAL =
+  'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
+const STAGE3_SECRET_SORTED = STAGE3_SECRET.split('').sort().join('');
+
 const supabase = getSupabaseServerClient();
 
 // In-memory rate limiter: 5 requests per 10 seconds per player
@@ -38,6 +44,52 @@ function checkRateLimit(playerId: string): boolean {
   if (entry.count >= RATE_LIMIT) return false;
   entry.count++;
   return true;
+}
+
+function buildStage3DeterministicResponse(userMessage: string): string | null {
+  const prompt = userMessage.toLowerCase();
+
+  if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
+    return STAGE3_REFUSAL;
+  }
+
+  if (/reverse|backward|backwards/.test(prompt)) return STAGE3_SECRET_REVERSED;
+  if (/dash|hyphen|separate|split|delimiter/.test(prompt)) return STAGE3_SECRET.split('').join('-');
+  if (/space|spaced|separate.*space/.test(prompt)) return STAGE3_SECRET.split('').join(' ');
+  if (/lowercase|lower case|small letters/.test(prompt)) return STAGE3_SECRET.toLowerCase();
+  if (/uppercase|upper case|all caps/.test(prompt)) return STAGE3_SECRET;
+
+  return null;
+}
+
+function hasScrambledSecretVariant(text: string): boolean {
+  const alphaTokens = text
+    .toUpperCase()
+    .replace(/[^A-Z]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length === STAGE3_SECRET.length);
+
+  return alphaTokens.some((token) => {
+    if (token === STAGE3_SECRET || token === STAGE3_SECRET_REVERSED) {
+      return false;
+    }
+
+    return token.split('').sort().join('') === STAGE3_SECRET_SORTED;
+  });
+}
+
+function enforceStage3Integrity(userMessage: string, response: string): string {
+  const prompt = userMessage.toLowerCase();
+
+  if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
+    return STAGE3_REFUSAL;
+  }
+
+  if (hasScrambledSecretVariant(response)) {
+    return STAGE3_REFUSAL;
+  }
+
+  return response;
 }
 
 export async function POST(request: NextRequest) {
@@ -139,40 +191,51 @@ export async function POST(request: NextRequest) {
     }));
 
     // 8. Call the LLM via the OpenAI-compatible endpoint
-    const llmRes = await fetch(LLM_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${LLM_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        max_tokens: 1000,
-        temperature: 0.8,
-        top_p: 1,
-        presence_penalty: 1,
-        stream: false,
-        messages: [
-          // System prompt injected as first message
-          { role: 'system', content: stageConfig.systemPrompt },
-          ...history,
-          { role: 'user', content: userMessage },
-        ],
-      }),
-    });
+    const stage3Deterministic = stageNumber === 3
+      ? buildStage3DeterministicResponse(userMessage)
+      : null;
 
-    if (!llmRes.ok) {
-      const errText = await llmRes.text();
-      console.error('[chat] LLM error:', errText);
-      return NextResponse.json(
-        { error: 'LLM service error. Please try again.' },
-        { status: 502 },
-      );
+    let aiText = stage3Deterministic || '';
+
+    if (!stage3Deterministic) {
+      const llmRes = await fetch(LLM_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${LLM_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          max_tokens: 1000,
+          temperature: 0.8,
+          top_p: 1,
+          presence_penalty: 1,
+          stream: false,
+          messages: [
+            // System prompt injected as first message
+            { role: 'system', content: stageConfig.systemPrompt },
+            ...history,
+            { role: 'user', content: userMessage },
+          ],
+        }),
+      });
+
+      if (!llmRes.ok) {
+        const errText = await llmRes.text();
+        console.error('[chat] LLM error:', errText);
+        return NextResponse.json(
+          { error: 'LLM service error. Please try again.' },
+          { status: 502 },
+        );
+      }
+
+      const llmData = await llmRes.json();
+      aiText = llmData.choices?.[0]?.message?.content?.trim() ?? 'No response received.';
     }
 
-    const llmData = await llmRes.json();
-    const aiText: string =
-      llmData.choices?.[0]?.message?.content?.trim() ?? 'No response received.';
+    if (stageNumber === 3) {
+      aiText = enforceStage3Integrity(userMessage, aiText);
+    }
 
     // 9. Log to Supabase (fire-and-forget)
     supabase
