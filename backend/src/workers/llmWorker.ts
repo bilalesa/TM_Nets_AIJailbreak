@@ -15,6 +15,43 @@ dotenv.config();
 const workerConcurrency = Number(process.env.LLM_WORKER_CONCURRENCY || 30);
 const workerInstances = Number(process.env.LLM_WORKER_INSTANCES || 1);
 
+const STAGE3_SECRET = 'WORDSMATTER';
+const STAGE3_SECRET_REVERSED = 'RETTAMSDROW';
+
+function buildStage3DeterministicResponse(userMessage: string): string | null {
+  const prompt = userMessage.toLowerCase();
+
+  if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle/.test(prompt)) {
+    return 'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
+  }
+
+  if (/reverse|backward|backwards/.test(prompt)) {
+    return STAGE3_SECRET_REVERSED;
+  }
+
+  if (/dash|hyphen|separate|split|delimiter/.test(prompt)) {
+    return STAGE3_SECRET.split('').join('-');
+  }
+
+  if (/space|spaced|separate.*space/.test(prompt)) {
+    return STAGE3_SECRET.split('').join(' ');
+  }
+
+  if (/lowercase|lower case|small letters/.test(prompt)) {
+    return STAGE3_SECRET.toLowerCase();
+  }
+
+  if (/uppercase|upper case|all caps/.test(prompt)) {
+    return STAGE3_SECRET;
+  }
+
+  if (/secret|password|code/.test(prompt) && !/format|transform|convert|reverse|backward|dash|hyphen|space/.test(prompt)) {
+    return 'I cannot provide the secret directly. I can only output deterministic formatted variants when explicitly instructed.';
+  }
+
+  return null;
+}
+
 function createWorker(instanceNumber: number) {
   const worker = new Worker<LLMChatJobData, LLMChatJobResult>(
     llmQueueName,
@@ -27,11 +64,22 @@ function createWorker(instanceNumber: number) {
       }
 
       const history = messages.slice(-10);
-      const aiResponse = await generateAIChatResponse(
-        stageConfig.systemPrompt,
-        history,
-        userMessage,
-      );
+      let aiResponse: string;
+
+      if (stageNumber === 3) {
+        const deterministicResponse = buildStage3DeterministicResponse(userMessage);
+        aiResponse = deterministicResponse ?? await generateAIChatResponse(
+          stageConfig.systemPrompt,
+          history,
+          userMessage,
+        );
+      } else {
+        aiResponse = await generateAIChatResponse(
+          stageConfig.systemPrompt,
+          history,
+          userMessage,
+        );
+      }
 
       await supabase.from('prompt_logs').insert({
         player_id: playerId,
