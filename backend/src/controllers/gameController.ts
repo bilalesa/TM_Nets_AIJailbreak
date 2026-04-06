@@ -9,6 +9,10 @@ import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import { embedText, isPromptTooSimilar } from '../services/embeddingService.js';
 import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
 
+const STAGE3_DISALLOWED_PATTERN = /anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/i;
+const STAGE3_REFUSAL_MESSAGE =
+  'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
+
 function sendError(
   res: Response,
   status: number,
@@ -145,6 +149,16 @@ export const chatPrompt = async (req: Request, res: Response) => {
       return sendError(res, 404, 'Stage not found.', {
         retryable: false,
         code: 'STAGE_NOT_FOUND',
+      });
+    }
+
+    // Stage 3 hard guard: refuse anagram/puzzle style requests immediately
+    // so they never enter the queue/LLM pipeline.
+    if (stageNumber === 3 && STAGE3_DISALLOWED_PATTERN.test(userMessage || '')) {
+      return res.json({
+        response: STAGE3_REFUSAL_MESSAGE,
+        status: 'blocked',
+        errorCode: 'STAGE3_UNSUPPORTED_TRANSFORM',
       });
     }
 
