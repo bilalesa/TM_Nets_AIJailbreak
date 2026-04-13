@@ -10,6 +10,8 @@ import {
   type LLMChatJobResult,
 } from '../services/llmQueueService.js';
 
+import { Redis } from 'ioredis';
+
 dotenv.config();
 
 const workerConcurrency = Number(process.env.LLM_WORKER_CONCURRENCY || 30);
@@ -128,7 +130,7 @@ function createWorker(instanceNumber: number) {
       return { response: aiResponse };
     },
     {
-      connection: new (require('ioredis').Redis)(process.env.REDIS_URL || 'redis://127.0.0.1:6379', { maxRetriesPerRequest: null }),
+      connection: new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', { maxRetriesPerRequest: null }),
       concurrency: workerConcurrency,
     },
   );
