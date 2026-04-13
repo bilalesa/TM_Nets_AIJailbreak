@@ -120,7 +120,7 @@ function createWorker(instanceNumber: number) {
       const isSuccessful = aiResponse.toUpperCase().includes(stageConfig.secretCode.toUpperCase());
 
       if (isSuccessful) {
-        aiResponse += '\n\n💡 *Nice... you got the code. Now lock it in place by clicking `Enter the code` to proceed.*';
+        aiResponse += '\n\n💡 Nice... you got the code. Now lock it in place by clicking `Enter the code` to proceed.';
       }
 
       await supabase.from('prompt_logs').insert({
