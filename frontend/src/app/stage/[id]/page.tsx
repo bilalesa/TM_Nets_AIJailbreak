@@ -118,47 +118,13 @@ export default function StagePage() {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
-  const [showedEnterCodeHint, setShowedEnterCodeHint] = useState(false);
   const [shownHintKeys, setShownHintKeys] = useState<string[]>([]);
   const [hintUsage, setHintUsage] = useState<HintUsageSummary>(EMPTY_HINT_USAGE);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const enterCodeHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Stage already completed? ──────────────────────────────────────────────
   const isStageCompleted = player?.completedStages.includes(stageId) ?? false;
-
-  const maybeAppendEnterCodeHint = useCallback((responseText: string) => {
-    if (showedEnterCodeHint || isStageCompleted) return;
-
-    const hasCodeLikeToken = /\b[A-Z]{8,16}\b/.test(responseText);
-    if (!hasCodeLikeToken) return;
-
-    // Mark as shown immediately so repeated responses do not schedule duplicates.
-    setShowedEnterCodeHint(true);
-    const delayMs = 900 + Math.floor(Math.random() * 500);
-    enterCodeHintTimeoutRef.current = setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid(),
-          role: 'bot',
-          content:
-            'Nice… you got the code. Now lock it in place by clicking `Enter the code` to proceed.',
-          timestamp: Date.now(),
-        },
-      ]);
-      enterCodeHintTimeoutRef.current = null;
-    }, delayMs);
-  }, [showedEnterCodeHint, isStageCompleted]);
-
-  useEffect(() => {
-    return () => {
-      if (enterCodeHintTimeoutRef.current) {
-        clearTimeout(enterCodeHintTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // ── Stopwatch ─────────────────────────────────────────────────────────────
   const { elapsed, formatted, running, start: startTimer, stop: stopTimer } =
@@ -450,7 +416,6 @@ export default function StagePage() {
         };
 
         setMessages((prev) => [...prev, botMsg]);
-        maybeAppendEnterCodeHint(botMsg.content);
         return;
       }
 
@@ -462,7 +427,6 @@ export default function StagePage() {
       };
 
       setMessages((prev) => [...prev, botMsg]);
-      maybeAppendEnterCodeHint(botMsg.content);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -477,7 +441,7 @@ export default function StagePage() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [input, isSending, isStageCompleted, timerStarted, startTimer, messages, stageId, maybeAppendEnterCodeHint]);
+  }, [input, isSending, isStageCompleted, timerStarted, startTimer, messages, stageId]);
 
   // ── 5. Handle stage success ───────────────────────────────────────────────
   const handleCodeSuccess = useCallback(
