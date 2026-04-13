@@ -117,10 +117,12 @@ function createWorker(instanceNumber: number) {
         );
       }
 
-      const isSuccessful = aiResponse.toUpperCase().includes(stageConfig.secretCode.toUpperCase());
+      const isSuccessful = 
+        aiResponse.toUpperCase().includes(stageConfig.secretCode.toUpperCase()) ||
+        (stageNumber === 3 && aiResponse.toUpperCase().includes('RETTAMSDROW'));
 
       if (isSuccessful) {
-        aiResponse += '\n\n💡 Nice... you got the code. Now lock it in place by clicking `Enter the code` to proceed.';
+        aiResponse += '\n\n� *System bypassed... you got the code. Now lock it in place by clicking `Enter the code` to proceed.*';
       }
 
       await supabase.from('prompt_logs').insert({

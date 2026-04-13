@@ -317,9 +317,10 @@ export default function StagePage() {
     // Build history for API (exclude the seeded bot message from history)
     const history = messages
       .filter((m) => m.id !== messages[0]?.id || messages.length > 1)
+      .filter((m) => !m.content.startsWith('💡'))
       .map((m) => ({
         role: m.role === 'bot' ? ('assistant' as const) : ('user' as const),
-        content: m.content,
+        content: m.content.split('\n\n🔑 *System bypassed')[0].split('\n\n💡 Nice...')[0].trim(),
       }))
       .slice(-20);
 
