@@ -128,7 +128,7 @@ function createWorker(instanceNumber: number) {
       return { response: aiResponse };
     },
     {
-      connection: llmQueueConnection,
+      connection: new (require('ioredis').Redis)(process.env.REDIS_URL || 'redis://127.0.0.1:6379', { maxRetriesPerRequest: null }),
       concurrency: workerConcurrency,
     },
   );

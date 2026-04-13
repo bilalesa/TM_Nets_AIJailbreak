@@ -1,9 +1,36 @@
 services:
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/workers/llmWorker.js"]
+    container_name: tm-nets-worker
+    network_mode: "host"
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: tm-nets-backend
+    network_mode: "host"
     restart: unless-stopped
     expose:
       - "3001"
