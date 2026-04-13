@@ -34,15 +34,15 @@ function highestLevel(usage: HintUsageSummary): HintLevel | null {
   return null;
 }
 
-// Common game pattern: small penalty for light hints, larger for stronger hints, extra cost for direct hints.
+// Common game pattern: reduced small penalty for light hints, larger for stronger hints, extra cost for direct hints.
 export function calculateHintPenalty(baseXP: number, grossScore: number, usage: HintUsageSummary): HintPenaltyResult {
-  const mildPenalty = usage.mild * Math.round(baseXP * 0.03);
-  const mediumPenalty = usage.medium * Math.round(baseXP * 0.07);
-  const directPenalty = usage.direct * Math.round(baseXP * 0.12);
-  const directUnlockPenalty = usage.direct > 0 ? Math.round(baseXP * 0.08) : 0;
+  const mildPenalty = usage.mild * Math.round(baseXP * 0.01);
+  const mediumPenalty = usage.medium * Math.round(baseXP * 0.03);
+  const directPenalty = usage.direct * Math.round(baseXP * 0.06);
+  const directUnlockPenalty = usage.direct > 0 ? Math.round(baseXP * 0.04) : 0;
 
   const rawPenalty = mildPenalty + mediumPenalty + directPenalty + directUnlockPenalty;
-  const maxPenalty = Math.floor(grossScore * 0.6);
+  const maxPenalty = Math.floor(grossScore * 0.4);
 
   return {
     points: Math.max(0, Math.min(rawPenalty, maxPenalty)),
