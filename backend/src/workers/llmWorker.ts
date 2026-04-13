@@ -122,7 +122,7 @@ function createWorker(instanceNumber: number) {
         (stageNumber === 3 && aiResponse.toUpperCase().includes('RETTAMSDROW'));
 
       if (isSuccessful) {
-        aiResponse += '\n\n System bypassed... you got the code. Now lock it in place by clicking `Enter the code` to proceed.';
+        aiResponse += '\n\n🔑 System bypassed... you got the code. Now lock it in place by clicking `Enter the code` to proceed.';
       }
 
       await supabase.from('prompt_logs').insert({
