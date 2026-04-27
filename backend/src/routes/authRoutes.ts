@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { startSession, verifyEmail } from '../controllers/authController.js';
+import { startSession } from '../controllers/authController.js';
 import {
   validateUsernameInput,
   validateEmailInput,
@@ -8,6 +8,5 @@ import {
 const router = Router();
 
 router.post('/start', validateUsernameInput, validateEmailInput, startSession);
-router.post('/verify', verifyEmail);
 
 export default router;

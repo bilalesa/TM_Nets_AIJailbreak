@@ -37,6 +37,7 @@ export default async function AuthedAdminLayout({
             <nav className="flex items-center gap-1 text-sm">
               <NavLink href="/admin">Dashboard</NavLink>
               <NavLink href="/admin/players">Players</NavLink>
+              <NavLink href="/admin/leaderboard">Leaderboard</NavLink>
               <NavLink href="/admin/stages">Stages</NavLink>
               <NavLink href="/admin/audit">Audit Log</NavLink>
             </nav>
