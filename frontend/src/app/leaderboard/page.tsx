@@ -181,10 +181,10 @@ export default function LeaderboardPage() {
   // ── Fallback if client not ready ──────────────────────────────────────────
   if (!supabaseClient || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-red-50">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#090C12] via-[#111522] to-[#1A0D10]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-2 border-[#C0392B] border-t-transparent animate-spin" />
-          <p className="text-sm text-gray-500 font-medium">Loading leaderboard…</p>
+          <div className="w-8 h-8 rounded-full border-2 border-[#D71920] border-t-transparent animate-spin" />
+          <p className="text-sm text-gray-300 font-medium">Loading leaderboard...</p>
         </div>
       </div>
     );
@@ -196,7 +196,7 @@ export default function LeaderboardPage() {
       {/* Background */}
       <div className="fixed inset-0 z-0">
         <Image
-          src="/images/bg.jpg"
+          src="/images/background.jpg"
           alt=""
           fill
           className="object-cover"
@@ -204,6 +204,7 @@ export default function LeaderboardPage() {
             ((e.target as HTMLImageElement).style.display = 'none')
           }
         />
+        <div className="absolute inset-0 bg-black/55" />
       </div>
 
       <div className="relative z-10 flex h-[100dvh] overflow-hidden">
@@ -242,6 +243,8 @@ export default function LeaderboardPage() {
                     ((e.target as HTMLImageElement).style.display = 'none')
                   }
                 />
+                {/* Dark overlay */}
+                <div className="absolute inset-0 bg-black/30" />
               </div>
 
               <div className="relative z-10 flex items-center justify-around h-full px-6 py-5">
@@ -277,16 +280,18 @@ export default function LeaderboardPage() {
                     ((e.target as HTMLImageElement).style.display = 'none')
                   }
                 />
+                {/* Dark overlay */}
+                <div className="absolute inset-0 bg-black/30" />
               </div>
 
               <div className="relative z-10 flex items-center justify-center h-full px-6 py-5">
                 <div className="flex items-center justify-center gap-5 text-center">
-                  <Timer className="w-14 h-14 text-[#1D4ED8]" strokeWidth={1.9} />
+                  <Timer className="w-14 h-14 text-white" strokeWidth={1.9} />
                   <div className="flex flex-col items-center justify-center text-center">
-                    <span className="text-[#1D4ED8] font-bold text-xs tracking-widest uppercase">
+                    <span className="text-white/80 font-bold text-xs tracking-widest uppercase">
                       Your Total Time
                     </span>
-                    <p className="font-black text-[#1D4ED8] text-3xl sm:text-4xl tracking-widest tabular-nums leading-none mt-1">
+                    <p className="font-black text-white text-3xl sm:text-4xl tracking-widest tabular-nums leading-none mt-1">
                       {currentPlayer?.totalTimeFormatted ?? '— : — : —'}
                     </p>
                   </div>
@@ -300,13 +305,13 @@ export default function LeaderboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="flex-1 flex flex-col min-h-0 bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-100 overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.05)]"
+            className="flex-1 flex flex-col min-h-0 bg-slate-900/45 backdrop-blur-xl rounded-2xl border border-white/15 overflow-hidden shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
           >
             {/* Table header bar */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/15">
               <div className="flex items-center gap-2.5">
-                <Trophy className="w-5 h-5 text-[#C0392B]" />
-                <h2 className="font-semibold text-gray-900 text-lg tracking-tight">
+                <Trophy className="w-5 h-5 text-[#D71920]" />
+                <h2 className="font-semibold text-gray-100 text-lg tracking-tight">
                   Leaderboard
                 </h2>
               </div>
@@ -315,7 +320,7 @@ export default function LeaderboardPage() {
                 <motion.button
                   onClick={() => fetchLeaderboard(false)}
                   whileTap={{ scale: 0.92 }}
-                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
                   title="Refresh now"
                 >
                   <RefreshCw
@@ -327,9 +332,9 @@ export default function LeaderboardPage() {
                 </motion.button>
 
                 {/* Player count */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FDECEA] border border-[#C0392B]/15">
-                  <Users className="w-3.5 h-3.5 text-[#C0392B]" />
-                  <span className="text-xs font-bold text-[#C0392B]">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D71920]/22 border border-[#D71920]/45 backdrop-blur-sm">
+                  <Users className="w-3.5 h-3.5 text-[#FFE9EA]" />
+                  <span className="text-xs font-bold text-[#FFE9EA]">
                     {totalPlayers} PLAYERS
                   </span>
                 </div>
@@ -337,12 +342,12 @@ export default function LeaderboardPage() {
             </div>
 
             {/* Column headers */}
-            <div className="grid grid-cols-4 px-3 sm:px-6 py-3 bg-gray-50/70 border-b border-gray-100">
+            <div className="grid grid-cols-4 px-3 sm:px-6 py-3 bg-white/8 border-b border-white/15">
               {['RANK', 'USERNAME', 'SCORE', 'COMPLETION TIME'].map((col) => (
                 <span
                   key={col}
                   className={cn(
-                    'px-1 text-[10px] sm:text-[11px] font-bold text-[#C0392B] tracking-widest uppercase',
+                    'px-1 text-[10px] sm:text-[11px] font-bold text-gray-400 tracking-widest uppercase',
                     col === 'COMPLETION TIME' ? 'leading-tight whitespace-normal sm:whitespace-nowrap' : 'whitespace-nowrap',
                   )}
                 >
@@ -359,10 +364,10 @@ export default function LeaderboardPage() {
             </div>
 
             {/* Rows */}
-            <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+            <div className="flex-1 overflow-y-auto divide-y divide-white/10">
               <AnimatePresence initial={false}>
                 {leaderboard.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-300 gap-2">
                     <Trophy className="w-10 h-10 opacity-20" />
                     <p className="text-sm font-medium">No players yet. Be the first!</p>
                   </div>
@@ -379,48 +384,26 @@ export default function LeaderboardPage() {
                       }}
                       className={cn(
                         'grid grid-cols-4 px-3 sm:px-6 py-4 items-center transition-colors',
-                        !entry.isCurrentPlayer && 'hover:bg-gray-50/50',
+                        !entry.isCurrentPlayer && 'hover:bg-white/8',
                       )}
                     >
                       {/* Rank */}
-                      <div
-                        className={cn(
-                          'px-1',
-                          entry.isCurrentPlayer ? 'text-[#C0392B]' : 'text-gray-500',
-                        )}
-                      >
+                      <div className="px-1 text-white">
                         <RankBadge rank={entry.rank} />
                       </div>
 
                       {/* Username */}
-                      <span
-                        className={cn(
-                          'px-1 text-sm font-medium truncate',
-                          entry.isCurrentPlayer
-                            ? 'text-[#C0392B] font-semibold'
-                            : 'text-gray-700',
-                        )}
-                      >
+                      <span className="px-1 text-sm font-medium truncate text-white">
                         {entry.username}
                       </span>
 
                       {/* Score */}
-                      <span
-                        className={cn(
-                          'px-1 text-sm font-semibold tabular-nums',
-                          entry.isCurrentPlayer ? 'text-[#C0392B]' : 'text-gray-700',
-                        )}
-                      >
+                      <span className="px-1 text-sm font-semibold tabular-nums text-white">
                         {entry.totalScore.toLocaleString()}
                       </span>
 
                       {/* Time */}
-                      <span
-                        className={cn(
-                          'px-1 text-[11px] sm:text-sm leading-tight font-mono tabular-nums whitespace-nowrap',
-                          entry.isCurrentPlayer ? 'text-[#C0392B]' : 'text-gray-500',
-                        )}
-                      >
+                      <span className="px-1 text-[11px] sm:text-sm leading-tight font-mono tabular-nums whitespace-nowrap text-white">
                         {entry.stagesPassed > 0
                           ? entry.totalTimeFormatted
                           : '—'}

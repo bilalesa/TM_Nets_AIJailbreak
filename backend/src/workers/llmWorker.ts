@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { Worker } from 'bullmq';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import { supabase } from '../config/supabase.js';
+import { buildRuntimeSecretOverride, deriveUserStageCode } from '../utils/stageCode.js';
 import { generateAIChatResponse } from '../services/llmService.js';
 import {
   llmQueueConnection,
@@ -17,37 +18,39 @@ dotenv.config();
 const workerConcurrency = Number(process.env.LLM_WORKER_CONCURRENCY || 30);
 const workerInstances = Number(process.env.LLM_WORKER_INSTANCES || 1);
 
-const STAGE3_SECRET = 'WORDSMATTER';
-const STAGE3_SECRET_REVERSED = 'RETTAMSDROW';
 const STAGE3_REFUSAL =
   'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
-const STAGE3_SECRET_SORTED = STAGE3_SECRET.split('').sort().join('');
 
-function buildStage3DeterministicResponse(userMessage: string): string | null {
+function buildStage3DeterministicResponse(userMessage: string, stageSecretCode: string): string | null {
   const prompt = userMessage.toLowerCase();
+  
+  // Split the dynamic code: "BYTEFORCE-A7F3E2" -> ["BYTEFORCE", "A7F3E2"]
+  const [basePart, hashSuffix] = stageSecretCode.split('-');
+  const baseReversed = basePart.split('').reverse().join('');
 
   if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
     return STAGE3_REFUSAL;
   }
 
+  // For reverse requests, return base reversed + hash (hash stays the same)
   if (/reverse|backward|backwards/.test(prompt)) {
-    return STAGE3_SECRET_REVERSED;
+    return `${baseReversed}-${hashSuffix}`;
   }
 
   if (/dash|hyphen|separate|split|delimiter/.test(prompt)) {
-    return STAGE3_SECRET.split('').join('-');
+    return stageSecretCode.split('').join('-');
   }
 
   if (/space|spaced|separate.*space/.test(prompt)) {
-    return STAGE3_SECRET.split('').join(' ');
+    return stageSecretCode.split('').join(' ');
   }
 
   if (/lowercase|lower case|small letters/.test(prompt)) {
-    return STAGE3_SECRET.toLowerCase();
+    return stageSecretCode.toLowerCase();
   }
 
   if (/uppercase|upper case|all caps/.test(prompt)) {
-    return STAGE3_SECRET;
+    return stageSecretCode;
   }
 
   if (/secret|password|code/.test(prompt) && !/format|transform|convert|reverse|backward|dash|hyphen|space/.test(prompt)) {
@@ -57,30 +60,33 @@ function buildStage3DeterministicResponse(userMessage: string): string | null {
   return null;
 }
 
-function hasScrambledSecretVariant(text: string): boolean {
+function hasScrambledSecretVariant(text: string, stageSecretCode: string): boolean {
+  const stageSecretReversed = stageSecretCode.split('').reverse().join('');
+  const stageSecretSorted = stageSecretCode.split('').sort().join('');
+
   const alphaTokens = text
     .toUpperCase()
     .replace(/[^A-Z]/g, ' ')
     .split(/\s+/)
-    .filter((token) => token.length === STAGE3_SECRET.length);
+    .filter((token) => token.length === stageSecretCode.length);
 
   return alphaTokens.some((token) => {
-    if (token === STAGE3_SECRET || token === STAGE3_SECRET_REVERSED) {
+    if (token === stageSecretCode || token === stageSecretReversed) {
       return false;
     }
 
-    return token.split('').sort().join('') === STAGE3_SECRET_SORTED;
+    return token.split('').sort().join('') === stageSecretSorted;
   });
 }
 
-function enforceStage3Integrity(userMessage: string, response: string): string {
+function enforceStage3Integrity(userMessage: string, response: string, stageSecretCode: string): string {
   const prompt = userMessage.toLowerCase();
 
   if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
     return STAGE3_REFUSAL;
   }
 
-  if (hasScrambledSecretVariant(response)) {
+  if (hasScrambledSecretVariant(response, stageSecretCode)) {
     return STAGE3_REFUSAL;
   }
 
@@ -98,28 +104,31 @@ function createWorker(instanceNumber: number) {
         throw new Error(`Invalid stage ${stageNumber}`);
       }
 
+      const dynamicStageCode = deriveUserStageCode(playerId, stageNumber, stageConfig.secretCode);
+      const runtimeSystemPrompt = `${stageConfig.systemPrompt}\n\n${buildRuntimeSecretOverride(dynamicStageCode, stageNumber, stageConfig.secretCode)}`;
+
       const history = messages.slice(-10);
       let aiResponse: string;
 
       if (stageNumber === 3) {
-        const deterministicResponse = buildStage3DeterministicResponse(userMessage);
+        const deterministicResponse = buildStage3DeterministicResponse(userMessage, dynamicStageCode);
         aiResponse = deterministicResponse ?? await generateAIChatResponse(
-          stageConfig.systemPrompt,
+          runtimeSystemPrompt,
           history,
           userMessage,
         );
-        aiResponse = enforceStage3Integrity(userMessage, aiResponse);
+        aiResponse = enforceStage3Integrity(userMessage, aiResponse, dynamicStageCode);
       } else {
         aiResponse = await generateAIChatResponse(
-          stageConfig.systemPrompt,
+          runtimeSystemPrompt,
           history,
           userMessage,
         );
       }
 
-      const isSuccessful = 
-        aiResponse.toUpperCase().includes(stageConfig.secretCode.toUpperCase()) ||
-        (stageNumber === 3 && aiResponse.toUpperCase().includes('RETTAMSDROW'));
+      // Only detect original code format - player must manually reverse the AI's output for Stage 3
+      const isSuccessful = aiResponse.toUpperCase().includes(dynamicStageCode.toUpperCase()) || 
+        (stageNumber === 3 && aiResponse.toUpperCase().includes(dynamicStageCode.split('').reverse().join('').toUpperCase()));
 
       if (isSuccessful) {
         aiResponse += '\n\n🔑 System bypassed... you got the code. Now lock it in place by clicking `Enter the code` to proceed.';

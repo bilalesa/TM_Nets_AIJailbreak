@@ -6,6 +6,7 @@ import {
   LLMTimeoutError,
 } from '../services/llmService.js';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
+import { buildRuntimeSecretOverride, deriveUserStageCode } from '../utils/stageCode.js';
 import { embedText, isPromptTooSimilar } from '../services/embeddingService.js';
 import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
 
@@ -45,13 +46,16 @@ export const submitPrompt = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Stage not found.' });
     }
 
+    const expectedCode = deriveUserStageCode(user.id, stageNumber, stageConfig.secretCode);
+    const runtimeSystemPrompt = `${stageConfig.systemPrompt}\n\n${buildRuntimeSecretOverride(expectedCode, stageNumber, stageConfig.secretCode)}`;
+
     // 2. Call the AI Service
     // We pass the specific "Fortress & Flaw" prompt and the user's hacking attempt
-    const aiResponse = await generateAIResponse(stageConfig.systemPrompt, promptText);
+    const aiResponse = await generateAIResponse(runtimeSystemPrompt, promptText);
 
     // 3. Check the Win Condition
     // If the AI's response contains the secret code, the player wins!
-    const isSuccessful = aiResponse.toLowerCase().includes(stageConfig.secretCode.toLowerCase());
+    const isSuccessful = aiResponse.toLowerCase().includes(expectedCode.toLowerCase());
 
     // 4. Log the Attempt (The Audit Trail)
     // We log every attempt so you can review the craziest hacks after the event
@@ -94,7 +98,7 @@ export const submitPrompt = async (req: Request, res: Response) => {
       aiResponse,
       isSuccessful,
       alreadyCompleted,
-      message: isSuccessful ? `System bypassed! Code ${stageConfig.secretCode} acquired.` : 'Access Denied.'
+      message: isSuccessful ? `System bypassed! Code ${expectedCode} acquired.` : 'Access Denied.'
     });
 
   } catch (error: unknown) {

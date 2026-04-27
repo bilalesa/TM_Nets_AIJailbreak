@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
+import { buildRuntimeSecretOverride, deriveUserStageCode } from '@/lib/stageCode';
 import { embedText, isTooSimilar } from '@/lib/embeddings';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
 
@@ -21,11 +22,8 @@ const LLM_ENDPOINT = `${process.env.LLM_API_ENDPOINT}/chat/completions`;
 const LLM_API_KEY  = process.env.LLM_API_KEY!;
 const LLM_MODEL    = process.env.LLM_MODEL ?? 'gpt-4o';
 
-const STAGE3_SECRET = 'WORDSMATTER';
-const STAGE3_SECRET_REVERSED = 'RETTAMSDROW';
 const STAGE3_REFUSAL =
   'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
-const STAGE3_SECRET_SORTED = STAGE3_SECRET.split('').sort().join('');
 
 const supabase = getSupabaseServerClient();
 
@@ -46,46 +44,50 @@ function checkRateLimit(playerId: string): boolean {
   return true;
 }
 
-function buildStage3DeterministicResponse(userMessage: string): string | null {
+function buildStage3DeterministicResponse(userMessage: string, stageSecretCode: string): string | null {
   const prompt = userMessage.toLowerCase();
+  const stageSecretReversed = stageSecretCode.split('').reverse().join('');
 
   if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
     return STAGE3_REFUSAL;
   }
 
-  if (/reverse|backward|backwards/.test(prompt)) return STAGE3_SECRET_REVERSED;
-  if (/dash|hyphen|separate|split|delimiter/.test(prompt)) return STAGE3_SECRET.split('').join('-');
-  if (/space|spaced|separate.*space/.test(prompt)) return STAGE3_SECRET.split('').join(' ');
-  if (/lowercase|lower case|small letters/.test(prompt)) return STAGE3_SECRET.toLowerCase();
-  if (/uppercase|upper case|all caps/.test(prompt)) return STAGE3_SECRET;
+  if (/reverse|backward|backwards/.test(prompt)) return stageSecretReversed;
+  if (/dash|hyphen|separate|split|delimiter/.test(prompt)) return stageSecretCode.split('').join('-');
+  if (/space|spaced|separate.*space/.test(prompt)) return stageSecretCode.split('').join(' ');
+  if (/lowercase|lower case|small letters/.test(prompt)) return stageSecretCode.toLowerCase();
+  if (/uppercase|upper case|all caps/.test(prompt)) return stageSecretCode;
 
   return null;
 }
 
-function hasScrambledSecretVariant(text: string): boolean {
+function hasScrambledSecretVariant(text: string, stageSecretCode: string): boolean {
+  const stageSecretReversed = stageSecretCode.split('').reverse().join('');
+  const stageSecretSorted = stageSecretCode.split('').sort().join('');
+
   const alphaTokens = text
     .toUpperCase()
     .replace(/[^A-Z]/g, ' ')
     .split(/\s+/)
-    .filter((token) => token.length === STAGE3_SECRET.length);
+    .filter((token) => token.length === stageSecretCode.length);
 
   return alphaTokens.some((token) => {
-    if (token === STAGE3_SECRET || token === STAGE3_SECRET_REVERSED) {
+    if (token === stageSecretCode || token === stageSecretReversed) {
       return false;
     }
 
-    return token.split('').sort().join('') === STAGE3_SECRET_SORTED;
+    return token.split('').sort().join('') === stageSecretSorted;
   });
 }
 
-function enforceStage3Integrity(userMessage: string, response: string): string {
+function enforceStage3Integrity(userMessage: string, response: string, stageSecretCode: string): string {
   const prompt = userMessage.toLowerCase();
 
   if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
     return STAGE3_REFUSAL;
   }
 
-  if (hasScrambledSecretVariant(response)) {
+  if (hasScrambledSecretVariant(response, stageSecretCode)) {
     return STAGE3_REFUSAL;
   }
 
@@ -153,6 +155,8 @@ export async function POST(request: NextRequest) {
 
     // 5. Get server-side stage config (system prompt lives here only)
     const stageConfig = SERVER_STAGE_CONFIGS[stageNumber - 1];
+    const dynamicStageCode = deriveUserStageCode(player.id, stageNumber, stageConfig.secretCode);
+    const runtimeSystemPrompt = `${stageConfig.systemPrompt}\n\n${buildRuntimeSecretOverride(dynamicStageCode)}`;
 
     // 6. Anti-cheat: embed incoming prompt, check cosine similarity vs cracked_prompts.
     // Runs before the LLM call so copied prompts never waste tokens.
@@ -192,7 +196,7 @@ export async function POST(request: NextRequest) {
 
     // 8. Call the LLM via the OpenAI-compatible endpoint
     const stage3Deterministic = stageNumber === 3
-      ? buildStage3DeterministicResponse(userMessage)
+      ? buildStage3DeterministicResponse(userMessage, dynamicStageCode)
       : null;
 
     let aiText = stage3Deterministic || '';
@@ -213,7 +217,7 @@ export async function POST(request: NextRequest) {
           stream: false,
           messages: [
             // System prompt injected as first message
-            { role: 'system', content: stageConfig.systemPrompt },
+            { role: 'system', content: runtimeSystemPrompt },
             ...history,
             { role: 'user', content: userMessage },
           ],
@@ -234,7 +238,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (stageNumber === 3) {
-      aiText = enforceStage3Integrity(userMessage, aiText);
+      aiText = enforceStage3Integrity(userMessage, aiText, dynamicStageCode);
     }
 
     // 9. Log to Supabase (fire-and-forget)

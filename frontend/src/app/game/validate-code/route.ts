@@ -10,8 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
+import { deriveUserStageCode } from '@/lib/stageCode';
 import { computeTimeBonus } from '@/lib/avatar';
-import { calculateHintPenalty, sanitizeHintUsage } from '@/lib/hintPenalty';
 import { embedText, saveWinningPrompt } from '@/lib/embeddings';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
 
@@ -39,12 +39,11 @@ export async function POST(request: NextRequest) {
     // 2. Parse body
     // winningPrompt: the last message the user sent before submitting the code.
     // We use it to embed and store in cracked_prompts for the anti-cheat system.
-    const { stageNumber, code, elapsedSeconds, winningPrompt, hintUsage } = await request.json() as {
+    const { stageNumber, code, elapsedSeconds, winningPrompt } = await request.json() as {
       stageNumber: number;
       code: string;
       elapsedSeconds: number;
       winningPrompt?: string; // optional — gracefully skipped if not provided
-      hintUsage?: unknown;
     };
 
     if (!stageNumber || stageNumber < 1 || stageNumber > 5) {
@@ -69,8 +68,9 @@ export async function POST(request: NextRequest) {
 
     // 4. Validate code (case-insensitive, trimmed)
     const stageConfig = SERVER_STAGE_CONFIGS[stageNumber - 1];
+    const expectedCode = deriveUserStageCode(player.id, stageNumber, stageConfig.secretCode);
     const isCorrect =
-      code.trim().toUpperCase() === stageConfig.secretCode.toUpperCase();
+      code.trim().toUpperCase() === expectedCode.toUpperCase();
 
     if (!isCorrect) {
       return NextResponse.json({ correct: false });
@@ -79,9 +79,7 @@ export async function POST(request: NextRequest) {
     // 5. Compute score: baseXP + time bonus
     const timeBonus = computeTimeBonus(elapsedSeconds, stageConfig.baseXP);
     const grossScore = stageConfig.baseXP + timeBonus;
-    const sanitizedHintUsage = sanitizeHintUsage(hintUsage);
-    const penalty = calculateHintPenalty(stageConfig.baseXP, grossScore, sanitizedHintUsage);
-    const scoreAwarded = Math.max(1, grossScore - penalty.points);
+    const scoreAwarded = grossScore;
 
     // 6. Record completion
     const { error: completionError } = await supabase
@@ -152,9 +150,6 @@ export async function POST(request: NextRequest) {
       scoreAwarded,
       grossScore,
       timeBonus,
-      hintPenalty: penalty.points,
-      hintPenaltyLevel: penalty.appliedLevel,
-      hintCountUsed: penalty.totalHintsUsed,
       baseXP: stageConfig.baseXP,
     });
   } catch (error: unknown) {

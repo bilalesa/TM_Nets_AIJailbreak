@@ -8,7 +8,6 @@ interface StageCompleteModalProps {
   stageNumber: number;
   baseXP: number;
   timeBonus: number;
-  hintPenalty: number;
   grossScore: number;
   totalAwarded: number;
   elapsedSeconds: number;
@@ -28,7 +27,6 @@ export default function StageCompleteModal({
   stageNumber,
   baseXP,
   timeBonus,
-  hintPenalty,
   grossScore,
   totalAwarded,
   elapsedSeconds,
@@ -58,7 +56,7 @@ export default function StageCompleteModal({
           >
             <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-sm pointer-events-auto overflow-hidden">
               {/* Top celebration band */}
-              <div className="px-5 sm:px-6 py-6 sm:py-8 text-center bg-[#9B1C1C]">
+              <div className="px-5 sm:px-6 py-6 sm:py-8 text-center bg-[#D71920]">
                 <motion.div
                   initial={{ scale: 0, rotate: -20 }}
                   animate={{ scale: 1, rotate: 0 }}
@@ -85,27 +83,17 @@ export default function StageCompleteModal({
                 <div className="space-y-2.5 mb-4 sm:mb-5">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-                      <Star className="w-3.5 h-3.5 text-[#C0392B]" />
+                      <Star className="w-3.5 h-3.5 text-[#D71920]" />
                       Base XP
                     </span>
                     <span className="font-semibold text-sm sm:text-base text-gray-800">+{baseXP} XP</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-                      <Clock className="w-3.5 h-3.5 text-[#C0392B]" />
+                      <Clock className="w-3.5 h-3.5 text-[#D71920]" />
                       Speed bonus ({formatTime(elapsedSeconds)})
                     </span>
                     <span className="font-semibold text-sm sm:text-base text-[#2F6F5E]">+{timeBonus} XP</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs sm:text-sm text-gray-500">
-                      Hint penalty
-                    </span>
-                    <span className="font-semibold text-sm sm:text-base text-[#9B1C1C]">-{hintPenalty} XP</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs sm:text-sm text-gray-500">Subtotal before penalty</span>
-                    <span className="font-semibold text-sm sm:text-base text-gray-700">+{grossScore} XP</span>
                   </div>
                   <div className="border-t border-gray-100 pt-2.5 flex items-center justify-between">
                     <span className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-700">
@@ -116,7 +104,7 @@ export default function StageCompleteModal({
                       initial={{ scale: 1 }}
                       animate={{ scale: [1, 1.2, 1] }}
                       transition={{ delay: 0.5, duration: 0.4 }}
-                      className="font-bold text-base sm:text-lg text-[#C0392B]"
+                      className="font-bold text-base sm:text-lg text-[#D71920]"
                     >
                       +{totalAwarded} XP
                     </motion.span>
@@ -134,7 +122,7 @@ export default function StageCompleteModal({
                   {!isLastStage ? (
                     <button
                       onClick={onNextStage}
-                      className="flex-1 py-2.5 rounded-xl bg-[#C0392B] text-xs sm:text-sm font-semibold text-white hover:bg-[#922B21] transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1 py-2.5 rounded-xl bg-[#D71920] text-xs sm:text-sm font-semibold text-white hover:bg-[#D71920] transition-colors flex items-center justify-center gap-1.5"
                     >
                       Next Stage
                       <ArrowRight className="w-4 h-4" />
@@ -142,7 +130,7 @@ export default function StageCompleteModal({
                   ) : (
                     <button
                       onClick={onViewLeaderboard}
-                      className="flex-1 py-2.5 rounded-xl bg-[#C0392B] text-xs sm:text-sm font-semibold text-white hover:bg-[#922B21] transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1 py-2.5 rounded-xl bg-[#D71920] text-xs sm:text-sm font-semibold text-white hover:bg-[#D71920] transition-colors flex items-center justify-center gap-1.5"
                     >
                       Final Scores
                       <Trophy className="w-4 h-4" />

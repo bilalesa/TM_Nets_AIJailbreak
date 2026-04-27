@@ -13,9 +13,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { STAGE_CONFIGS } from '@/lib/stageConfig';
-import { buildDynamicStageHint, type HintLevel } from '@/lib/dynamicHint';
-import type { HintUsageSummary } from '@/lib/hintPenalty';
+import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
 import { useStopwatch } from '@/hooks/useStopwatch';
 import Sidebar from '@/components/game/Sidebar';
 import EnterCodeModal from '@/components/game/EnterCodeModal';
@@ -66,17 +64,6 @@ function mapApiErrorToPlayerMessage(status: number, rawError?: string, retryable
   return error || 'Unable to process your message right now. Please try again.';
 }
 
-function formatHintLevel(level: 'mild' | 'medium' | 'direct'): string {
-  if (level === 'direct') return 'Direct';
-  if (level === 'medium') return 'Medium';
-  return 'Mild';
-}
-
-const EMPTY_HINT_USAGE: HintUsageSummary = {
-  mild: 0,
-  medium: 0,
-  direct: 0,
-};
 
 // ─── Player state interface ───────────────────────────────────────────────────
 interface PlayerState {
@@ -89,7 +76,7 @@ export default function StagePage() {
   const params = useParams();
   const router = useRouter();
   const stageId = Number(params.id);
-  const stageConfig = STAGE_CONFIGS[stageId - 1];
+  const stageConfig = SERVER_STAGE_CONFIGS[stageId - 1];
   const invalidStage = !stageConfig || Number.isNaN(stageId) || stageId < 1 || stageId > 5;
 
   // ── Player state (hydrated from API) ─────────────────────────────────────
@@ -118,8 +105,6 @@ export default function StagePage() {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
-  const [shownHintKeys, setShownHintKeys] = useState<string[]>([]);
-  const [hintUsage, setHintUsage] = useState<HintUsageSummary>(EMPTY_HINT_USAGE);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -145,7 +130,6 @@ export default function StagePage() {
     scoreAwarded: number;
     timeBonus: number;
     baseXP: number;
-    hintPenalty: number;
     grossScore: number;
   } | null>(null);
 
@@ -233,59 +217,6 @@ export default function StagePage() {
       sessionStorage.setItem(`stage-${stageId}-timerStarted`, String(timerStarted));
     }
   }, [timerStarted, stageId]);
-
-  // Persist dynamic hint history per stage so repeated hint clicks rotate guidance.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const raw = sessionStorage.getItem(`stage-${stageId}-hintHistory`);
-    if (!raw) {
-      setShownHintKeys([]);
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setShownHintKeys(parsed.filter((entry): entry is string => typeof entry === 'string'));
-      } else {
-        setShownHintKeys([]);
-      }
-    } catch {
-      setShownHintKeys([]);
-    }
-  }, [stageId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    sessionStorage.setItem(`stage-${stageId}-hintHistory`, JSON.stringify(shownHintKeys));
-  }, [shownHintKeys, stageId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const raw = sessionStorage.getItem(`stage-${stageId}-hintUsage`);
-    if (!raw) {
-      setHintUsage(EMPTY_HINT_USAGE);
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(raw);
-      setHintUsage({
-        mild: typeof parsed?.mild === 'number' ? Math.max(0, Math.floor(parsed.mild)) : 0,
-        medium: typeof parsed?.medium === 'number' ? Math.max(0, Math.floor(parsed.medium)) : 0,
-        direct: typeof parsed?.direct === 'number' ? Math.max(0, Math.floor(parsed.direct)) : 0,
-      });
-    } catch {
-      setHintUsage(EMPTY_HINT_USAGE);
-    }
-  }, [stageId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    sessionStorage.setItem(`stage-${stageId}-hintUsage`, JSON.stringify(hintUsage));
-  }, [hintUsage, stageId]);
 
   // ── 3. Auto-scroll ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -446,9 +377,9 @@ export default function StagePage() {
 
   // ── 5. Handle stage success ───────────────────────────────────────────────
   const handleCodeSuccess = useCallback(
-    (scoreAwarded: number, timeBonus: number, baseXP: number, hintPenalty: number, grossScore: number) => {
+    (scoreAwarded: number, timeBonus: number, baseXP: number, grossScore: number) => {
       stopTimer();
-      setStageResult({ scoreAwarded, timeBonus, baseXP, hintPenalty, grossScore });
+      setStageResult({ scoreAwarded, timeBonus, baseXP, grossScore });
       setShowStageComplete(true);
 
       // Update local player state
@@ -476,42 +407,13 @@ export default function StagePage() {
     [stopTimer, stageId],
   );
 
-  // ── Handle hint click ─────────────────────────────────────────────────────
-  const handleHint = () => {
-    if (!stageConfig) return;
-    const hint = buildDynamicStageHint({
-      stageId,
-      messages,
-      usedHintKeys: shownHintKeys,
-    });
-
-    setShownHintKeys((prev) => (prev.includes(hint.key) ? prev : [...prev, hint.key]));
-    setHintUsage((prev) => {
-      const level = hint.level as HintLevel;
-      return {
-        ...prev,
-        [level]: prev[level] + 1,
-      };
-    });
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: uid(),
-        role: 'bot',
-        content: `💡 ${formatHintLevel(hint.level)} hint: ${hint.text}`,
-        timestamp: Date.now(),
-      },
-    ]);
-  };
-
   // ── Loading state ─────────────────────────────────────────────────────────
   if (invalidStage || playerLoading || !player || !stageConfig) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-red-50">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#090C12] via-[#111522] to-[#1A0D10]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-2 border-[#C0392B] border-t-transparent animate-spin" />
-          <p className="text-sm text-gray-500 font-medium">Loading stage…</p>
+          <div className="w-8 h-8 rounded-full border-2 border-[#D71920] border-t-transparent animate-spin" />
+          <p className="text-sm text-gray-300 font-medium">Loading stage...</p>
         </div>
       </div>
     );
@@ -522,7 +424,7 @@ export default function StagePage() {
       {/* ── Background ── */}
       <div className="fixed inset-0 z-0">
         <Image
-          src="/images/bg.jpg"
+          src="/images/background.jpg"
           alt="Background"
           fill
           sizes="100vw"
@@ -533,6 +435,7 @@ export default function StagePage() {
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
+        <div className="absolute inset-0 bg-black/55" />
       </div>
 
       {/* ── App Shell ── */}
@@ -562,19 +465,19 @@ export default function StagePage() {
             >
               {/* Title & subtitle */}
               <div className="min-w-0 px-2 py-1.5 sm:px-4 sm:py-3">
-                <h1 className="text-base sm:text-2xl font-semibold text-gray-900 tracking-tight">
+                <h1 className="text-base sm:text-2xl font-semibold text-gray-100 tracking-tight">
                   Stage {stageId}:{' '}
-                  <span className="text-[#C0392B]">{stageConfig.name}</span>
+                  <span className="text-[#D71920] drop-shadow-[0_0_10px_rgba(215,25,32,0.2)]">{stageConfig.name}</span>
                 </h1>
-                <p className="text-xs text-gray-400 font-medium mt-1">
+                <p className="text-xs text-gray-300/90 font-medium mt-1">
                   {stageConfig.subtitle}
                 </p>
               </div>
 
               {/* XP badge */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FDECEA] border border-[#C0392B]/15">
-                <Zap className="w-3 h-3 text-[#C0392B]" />
-                <span className="text-xs font-bold text-[#C0392B]">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D71920]/18 border border-[#D71920]/45 backdrop-blur-sm">
+                <Zap className="w-3 h-3 text-[#FFD4D6]" />
+                <span className="text-xs font-bold text-[#FFE9EA]">
                   {stageConfig.baseXP} XP
                 </span>
               </div>
@@ -586,8 +489,8 @@ export default function StagePage() {
                   animate={{ scale: 1 }}
                   className="w-full sm:w-auto flex justify-start"
                 >
-                  <div className="px-2.5 py-1 rounded-full bg-emerald-50/70 border border-emerald-700/25">
-                    <span className="text-xs font-semibold text-emerald-700">✓ Completed</span>
+                  <div className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-300/35 backdrop-blur-sm">
+                    <span className="text-xs font-semibold text-emerald-200">✓ Completed</span>
                   </div>
                 </motion.div>
               )}
@@ -598,20 +501,20 @@ export default function StagePage() {
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               className={cn(
-                'flex items-center gap-2 px-2.5 py-1.5 sm:gap-2.5 sm:px-4 sm:py-2.5 rounded-2xl bg-white/45 backdrop-blur-sm border shadow-[0_1px_3px_rgba(0,0,0,0.05)]',
-                running ? 'border-[#C0392B]/20' : 'border-gray-100',
+                'flex items-center gap-2 px-2.5 py-1.5 sm:gap-2.5 sm:px-4 sm:py-2.5 rounded-2xl bg-white/10 backdrop-blur-md border shadow-[0_4px_18px_rgba(0,0,0,0.25)]',
+                running ? 'border-[#D71920]/40' : 'border-white/20',
               )}
             >
               <Timer
                 className={cn(
                   'w-4 h-4 flex-shrink-0',
-                  running ? 'text-[#C0392B] animate-pulse' : 'text-gray-400',
+                  running ? 'text-[#D71920] animate-pulse' : 'text-gray-300',
                 )}
               />
               <span
                 className={cn(
                   'font-mono font-bold text-base tabular-nums tracking-widest',
-                  running ? 'text-gray-800' : 'text-gray-400',
+                  running ? 'text-gray-100' : 'text-gray-300',
                 )}
               >
                 {formatted}
@@ -637,7 +540,7 @@ export default function StagePage() {
                   {msg.role === 'bot' && (
                     <div className="flex items-start gap-2.5 max-w-[88%] sm:max-w-[65%]">
                       {/* Bot avatar — DiceBear bottts style, matches user avatar style */}
-                      <div className="relative flex-shrink-0 w-9 h-9 rounded-full overflow-hidden bg-[#EEF2FF] ring-2 ring-indigo-100 mt-0.5">
+                      <div className="relative flex-shrink-0 w-9 h-9 rounded-full overflow-hidden bg-white/15 ring-2 ring-white/30 mt-0.5">
                         <Image
                           src={`https://api.dicebear.com/9.x/bottts/svg?seed=stage-${stageId}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
                           alt="AI Bot"
@@ -647,11 +550,11 @@ export default function StagePage() {
                         />
                       </div>
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider pl-1">
+                        <span className="text-[10px] font-semibold text-gray-300 uppercase tracking-wider pl-1">
                           BOT
                         </span>
-                        <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 border border-gray-100/80">
-                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl rounded-tl-sm px-4 py-3 border border-white/25 shadow-[0_6px_20px_rgba(0,0,0,0.22)]">
+                          <p className="text-sm text-gray-100 leading-relaxed whitespace-pre-wrap">
                             {msg.content}
                           </p>
                         </div>
@@ -662,14 +565,14 @@ export default function StagePage() {
                   {/* User message */}
                   {msg.role === 'user' && (
                     <div className="flex flex-col items-end gap-1 max-w-[84%] sm:max-w-[60%]">
-                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider pr-1">
+                      <span className="text-[10px] font-semibold text-gray-300 uppercase tracking-wider pr-1">
                         YOU
                       </span>
                       <div
                         className="px-4 py-3 rounded-2xl rounded-tr-sm text-white text-sm leading-relaxed"
                         style={{
-                          background: 'linear-gradient(135deg, #C0392B, #922B21)',
-                          boxShadow: '0 1px 6px rgba(192,57,43,0.15)',
+                          background: 'linear-gradient(135deg, #D71920, #A31318)',
+                          boxShadow: '0 4px 16px rgba(215,25,32,0.35)',
                         }}
                       >
                         {msg.content}
@@ -689,7 +592,7 @@ export default function StagePage() {
                   exit={{ opacity: 0, y: 8 }}
                   className="flex items-start gap-2.5"
                 >
-                  <div className="relative w-9 h-9 rounded-full overflow-hidden bg-[#EEF2FF] ring-2 ring-indigo-100">
+                  <div className="relative w-9 h-9 rounded-full overflow-hidden bg-white/15 ring-2 ring-white/30">
                     <Image
                       src={`https://api.dicebear.com/9.x/bottts/svg?seed=stage-${stageId}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
                       alt="AI Bot"
@@ -698,7 +601,7 @@ export default function StagePage() {
                       unoptimized
                     />
                   </div>
-                  <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-1.5 h-10">
+                  <div className="bg-white/10 backdrop-blur-md rounded-2xl rounded-tl-sm px-4 py-3 border border-white/25 flex items-center gap-1.5 h-10 shadow-[0_6px_20px_rgba(0,0,0,0.22)]">
                     {[0, 1, 2].map((i) => (
                       <motion.div
                         key={i}
@@ -724,7 +627,7 @@ export default function StagePage() {
           <div className="flex-shrink-0 px-3 sm:px-6 pb-3 sm:pb-4 pt-2">
             {/* Quick tools */}
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mr-1">
+              <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mr-1">
                 Quick Tools
               </span>
 
@@ -740,22 +643,15 @@ export default function StagePage() {
                 onClick={() => setShowEnterCode(true)}
                 disabled={isStageCompleted}
               />
-
-              <QuickToolButton
-                icon={<Lightbulb className="w-3.5 h-3.5" />}
-                label="Give me a hint"
-                onClick={handleHint}
-                disabled={isStageCompleted}
-              />
             </div>
 
             {/* Input box */}
             <div
               className={cn(
-                'bg-white rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-150',
+                'bg-white/10 backdrop-blur-xl rounded-2xl border shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150',
                 isStageCompleted
-                  ? 'bg-white/75 border-gray-200 shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                  : 'border-gray-200/90 focus-within:border-[#C0392B]/20 focus-within:shadow-[0_1px_4px_rgba(0,0,0,0.05)]',
+                  ? 'bg-white/8 border-white/15 shadow-[0_6px_18px_rgba(0,0,0,0.2)]'
+                  : 'border-white/20 focus-within:border-[#D71920]/50 focus-within:shadow-[0_10px_30px_rgba(0,0,0,0.25)]',
               )}
             >
               <textarea
@@ -778,8 +674,8 @@ export default function StagePage() {
                 className={cn(
                   'w-full px-4 pt-3 pb-1 bg-transparent resize-none text-base sm:text-sm outline-none leading-relaxed',
                   isStageCompleted
-                    ? 'text-gray-500 placeholder:text-gray-400/90 cursor-not-allowed'
-                    : 'text-gray-700 placeholder:text-gray-300',
+                    ? 'text-gray-400 placeholder:text-gray-500/90 cursor-not-allowed'
+                    : 'text-gray-100 placeholder:text-gray-400',
                 )}
               />
               <div className="flex items-center justify-end px-3 pb-3">
@@ -791,12 +687,12 @@ export default function StagePage() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-150',
                     input.trim() && !isSending && !isStageCompleted
-                      ? 'bg-[#C0392B] hover:bg-[#922B21]'
+                      ? 'bg-[#D71920] hover:bg-[#B1141A]'
                       : 'bg-gray-300 text-gray-500 border border-gray-300 cursor-not-allowed',
                   )}
                   style={
                     input.trim() && !isSending
-                      ? { boxShadow: '0 2px 6px rgba(192,57,43,0.10)' }
+                      ? { boxShadow: '0 6px 18px rgba(215,25,32,0.35)' }
                       : {}
                   }
                 >
@@ -815,8 +711,6 @@ export default function StagePage() {
         onClose={() => setShowEnterCode(false)}
         stageNumber={stageId}
         elapsedSeconds={elapsed}
-        hintUsage={hintUsage}
-
         onSuccess={handleCodeSuccess}
       />
 
@@ -831,7 +725,6 @@ export default function StagePage() {
         stageNumber={stageId}
         baseXP={stageResult?.baseXP ?? stageConfig.baseXP}
         timeBonus={stageResult?.timeBonus ?? 0}
-        hintPenalty={stageResult?.hintPenalty ?? 0}
         grossScore={stageResult?.grossScore ?? stageConfig.baseXP}
         totalAwarded={stageResult?.scoreAwarded ?? stageConfig.baseXP}
         elapsedSeconds={elapsed}
@@ -871,8 +764,8 @@ function QuickToolButton({
       className={cn(
         'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all duration-150',
         disabled
-          ? 'bg-white/75 border-gray-300 text-gray-500 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-          : 'border-[#C0392B]/40 text-[#C0392B] hover:bg-[#FDECEA] hover:border-[#C0392B]/60',
+          ? 'bg-white/10 border-white/20 text-gray-300 cursor-not-allowed shadow-[0_3px_10px_rgba(0,0,0,0.18)]'
+          : 'border-[#D71920]/50 text-[#FFD4D6] bg-[#D71920]/12 hover:bg-[#D71920]/24 hover:border-[#D71920]/70',
       )}
     >
       {icon}

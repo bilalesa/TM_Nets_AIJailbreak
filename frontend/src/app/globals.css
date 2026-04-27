@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --brand-red: #C0392B;
-  --brand-red-dark: #922B21;
-  --brand-red-light: #E74C3C;
+  --brand-red: #D71920;
+  --brand-red-dark: #D71920;
+  --brand-red-light: #D71920;
   --brand-red-muted: rgba(192, 57, 43, 0.15);
 }
 

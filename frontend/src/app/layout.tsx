@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Breaking the Prompt - Inside AI Manipulation",
-  description: "Get the AI to reveal the secret code. A jailbreak challenge by TrendAI x NETS.",
+  title: "Breaking the Prompt - Inside AI Manipulation | MTX × DEFCON",
+  description: "Get the AI to reveal the secret code. A defense-themed jailbreak challenge by TrendAI at MTX × DEFCON.",
   icons: {
     icon: "/images/TrendAI-Logo-Icon-Full-Color-RGB.png",
   },

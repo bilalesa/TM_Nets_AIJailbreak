@@ -10,8 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
+import { deriveUserStageCode } from '@/lib/stageCode';
 import { computeTimeBonus } from '@/lib/avatar';
-import { calculateHintPenalty, sanitizeHintUsage } from '@/lib/hintPenalty';
 import { embedText, saveWinningPrompt } from '@/lib/embeddings';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
 
@@ -60,11 +60,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Parse body
-    const { stageNumber, code, elapsedSeconds, hintUsage } = (await request.json()) as {
+    const { stageNumber, code, elapsedSeconds } = (await request.json()) as {
       stageNumber?: unknown;
       code?: unknown;
       elapsedSeconds?: unknown;
-      hintUsage?: unknown;
     };
 
     if (!Number.isInteger(stageNumber)) {
@@ -104,8 +103,8 @@ export async function POST(request: NextRequest) {
 
     // 4. Validate code (case-insensitive, trimmed)
     const stageConfig = SERVER_STAGE_CONFIGS[parsedStageNumber - 1];
-    const isCorrect =
-      code.trim().toUpperCase() === stageConfig.secretCode.toUpperCase();
+    const expectedCode = deriveUserStageCode(player.id, parsedStageNumber, stageConfig.secretCode);
+    const isCorrect = code.trim().toUpperCase() === expectedCode.toUpperCase();
 
     if (!isCorrect) {
       return NextResponse.json({ correct: false });
@@ -114,9 +113,7 @@ export async function POST(request: NextRequest) {
     // 5. Compute score: baseXP + time bonus
     const timeBonus = computeTimeBonus(elapsedSecondsSafe, stageConfig.baseXP);
     const grossScore = stageConfig.baseXP + timeBonus;
-    const sanitizedHintUsage = sanitizeHintUsage(hintUsage);
-    const penalty = calculateHintPenalty(stageConfig.baseXP, grossScore, sanitizedHintUsage);
-    const scoreAwarded = Math.max(1, grossScore - penalty.points);
+    const scoreAwarded = grossScore;
 
     // 6. Record completion
     const { error: completionError } = await supabase
@@ -218,9 +215,6 @@ export async function POST(request: NextRequest) {
       scoreAwarded,
       grossScore,
       timeBonus,
-      hintPenalty: penalty.points,
-      hintPenaltyLevel: penalty.appliedLevel,
-      hintCountUsed: penalty.totalHintsUsed,
       baseXP: stageConfig.baseXP,
     });
   } catch (error: unknown) {

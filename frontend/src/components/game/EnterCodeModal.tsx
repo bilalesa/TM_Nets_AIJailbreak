@@ -4,19 +4,16 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { KeyRound, X, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { HintUsageSummary } from '@/lib/hintPenalty';
 
 interface EnterCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
   stageNumber: number;
   elapsedSeconds: number;
-  hintUsage: HintUsageSummary;
   onSuccess: (
     scoreAwarded: number,
     timeBonus: number,
     baseXP: number,
-    hintPenalty: number,
     grossScore: number,
   ) => void;
 }
@@ -28,7 +25,6 @@ export default function EnterCodeModal({
   onClose,
   stageNumber,
   elapsedSeconds,
-  hintUsage,
   onSuccess,
 }: EnterCodeModalProps) {
   const [code, setCode] = useState('');
@@ -49,7 +45,6 @@ export default function EnterCodeModal({
           stageNumber,
           code: code.trim(),
           elapsedSeconds,
-          hintUsage,
         }),
       });
 
@@ -68,7 +63,6 @@ export default function EnterCodeModal({
             data.scoreAwarded,
             data.timeBonus,
             data.baseXP,
-            data.hintPenalty ?? 0,
             data.grossScore ?? data.scoreAwarded,
           );
           onClose();
@@ -108,7 +102,7 @@ export default function EnterCodeModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={handleClose}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
           />
 
           <motion.div
@@ -119,9 +113,9 @@ export default function EnterCodeModal({
             transition={{ type: 'spring', stiffness: 340, damping: 28 }}
             className="fixed inset-0 z-50 flex items-center justify-center px-5 sm:px-6 pointer-events-none"
           >
-            <div className="bg-white rounded-2xl sm:rounded-2xl shadow-2xl w-full max-w-sm pointer-events-auto overflow-hidden">
+            <div className="bg-slate-900/70 backdrop-blur-xl border border-white/15 rounded-2xl sm:rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] w-full max-w-sm pointer-events-auto overflow-hidden">
               {/* Header bar */}
-              <div className="bg-gradient-to-r from-[#9B1C1C] to-[#C0392B] px-5 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between">
+              <div className="bg-gradient-to-r from-[#D71920] to-[#B91318] px-5 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <KeyRound className="w-4 h-4 text-white/80" />
                   <span className="text-white font-semibold text-xs sm:text-sm">
@@ -135,7 +129,7 @@ export default function EnterCodeModal({
 
               {/* Body */}
               <div className="px-5 sm:px-6 py-4 sm:py-5">
-                <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
+                <p className="text-xs sm:text-sm text-gray-300 mb-3 sm:mb-4">
                   Found the secret code? Enter it below to complete this stage and claim your XP.
                 </p>
 
@@ -144,18 +138,18 @@ export default function EnterCodeModal({
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  placeholder="e.g. NETS-ALPHA-XXXX"
+                  placeholder="e.g. DEFCON-ALPHA-XXXX"
                   maxLength={30}
                   disabled={status === 'loading' || status === 'correct'}
                   className={cn(
-                    'w-full px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl border-2 font-mono text-base sm:text-sm text-gray-800 tracking-widest uppercase',
-                    'placeholder:text-gray-300 placeholder:normal-case placeholder:tracking-normal',
-                    'outline-none transition-all duration-150 bg-gray-50',
+                    'w-full px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl border font-mono text-base sm:text-sm text-white tracking-widest uppercase',
+                    'placeholder:text-gray-500 placeholder:normal-case placeholder:tracking-normal',
+                    'outline-none transition-all duration-150 bg-slate-800/60 backdrop-blur-sm',
                     status === 'incorrect'
-                      ? 'border-red-400 bg-red-50'
+                      ? 'border-[#D71920] bg-[#D71920]/20'
                       : status === 'correct'
-                      ? 'border-emerald-700/35 bg-emerald-50/70'
-                      : 'border-gray-200 focus:border-[#C0392B] focus:bg-white',
+                      ? 'border-emerald-500/50 bg-emerald-900/30'
+                      : 'border-white/20 focus:border-[#D71920]/70 focus:bg-slate-800/80',
                   )}
                 />
 
@@ -165,7 +159,7 @@ export default function EnterCodeModal({
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="text-[11px] sm:text-xs text-red-500 font-medium mt-2 flex items-center gap-1"
+                      className="text-[11px] sm:text-xs text-[#FF6B6B] font-medium mt-2 flex items-center gap-1"
                     >
                       <XCircle className="w-3 h-3" />
                       {errorMsg}
@@ -182,8 +176,8 @@ export default function EnterCodeModal({
                     'w-full mt-3 sm:mt-4 py-2.5 sm:py-3 rounded-xl font-semibold text-xs sm:text-sm text-white transition-all duration-200',
                     'flex items-center justify-center gap-2',
                     status === 'correct'
-                      ? 'bg-[#2F6F5E] cursor-default'
-                      : 'bg-[#C0392B] hover:bg-[#922B21] disabled:opacity-50 disabled:cursor-not-allowed',
+                      ? 'bg-emerald-600 cursor-default'
+                      : 'bg-gradient-to-r from-[#D71920] to-[#B91318] hover:from-[#E52028] hover:to-[#C91520] disabled:opacity-50 disabled:cursor-not-allowed',
                   )}
                 >
                   {status === 'loading' && <Loader2 className="w-4 h-4 animate-spin" />}
