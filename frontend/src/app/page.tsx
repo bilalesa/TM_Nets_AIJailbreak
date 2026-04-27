@@ -213,6 +213,13 @@ export default function LoginPage() {
                 disabled={isLoading || isSuccess}
                 aria-label="Username"
                 aria-describedby={status === 'error' ? 'username-error' : undefined}
+                name="game-player-nickname"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 className={cn(
                   'w-full px-5 py-4 rounded-2xl text-base',
                   'bg-white/10 backdrop-blur-sm',
