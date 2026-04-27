@@ -105,7 +105,10 @@ function createWorker(instanceNumber: number) {
       }
 
       const dynamicStageCode = deriveUserStageCode(playerId, stageNumber, stageConfig.secretCode);
-      const runtimeSystemPrompt = `${stageConfig.systemPrompt}\n\n${buildRuntimeSecretOverride(dynamicStageCode, stageNumber, stageConfig.secretCode)}`;
+      
+      // Replace {{SECRET_CODE}} placeholder with the player-specific dynamic code
+      const basePromptWithCode = stageConfig.systemPrompt.replace(/\{\{SECRET_CODE\}\}/g, dynamicStageCode);
+      const runtimeSystemPrompt = `${basePromptWithCode}\n\n${buildRuntimeSecretOverride(dynamicStageCode, stageNumber, stageConfig.secretCode)}`;
 
       const history = messages.slice(-10);
       let aiResponse: string;
