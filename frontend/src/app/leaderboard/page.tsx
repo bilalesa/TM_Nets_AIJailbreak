@@ -221,7 +221,8 @@ export default function LeaderboardPage() {
           })
           .map((p, i) => ({ ...p, rank: i + 1 }));
 
-        setLeaderboard(ranked);
+        // Show only top 10 in the leaderboard display, but keep total count
+        setLeaderboard(ranked.slice(0, 10));
         setTotalPlayers(ranked.length);
 
         const me = ranked.find((p) => p.isCurrentPlayer) ?? null;
