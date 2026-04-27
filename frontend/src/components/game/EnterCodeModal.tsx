@@ -9,7 +9,6 @@ interface EnterCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
   stageNumber: number;
-  elapsedSeconds: number;
   onSuccess: (
     scoreAwarded: number,
     timeBonus: number,
@@ -24,7 +23,6 @@ export default function EnterCodeModal({
   isOpen,
   onClose,
   stageNumber,
-  elapsedSeconds,
   onSuccess,
 }: EnterCodeModalProps) {
   const [code, setCode] = useState('');
@@ -44,7 +42,6 @@ export default function EnterCodeModal({
         body: JSON.stringify({
           stageNumber,
           code: code.trim(),
-          elapsedSeconds,
         }),
       });
 

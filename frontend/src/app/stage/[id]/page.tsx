@@ -715,7 +715,6 @@ export default function StagePage() {
         isOpen={showEnterCode}
         onClose={() => setShowEnterCode(false)}
         stageNumber={stageId}
-        elapsedSeconds={elapsed}
         onSuccess={handleCodeSuccess}
       />
 
