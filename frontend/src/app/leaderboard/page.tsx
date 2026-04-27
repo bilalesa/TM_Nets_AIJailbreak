@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Sidebar from '@/components/game/Sidebar';
-import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
+import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

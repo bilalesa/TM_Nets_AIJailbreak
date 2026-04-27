@@ -4,15 +4,13 @@
 //
 // Flow:
 //   1. embedText()        → calls the configured embeddings endpoint to turn a string into a vector
-//   2. isTooSimilar()     → queries Supabase for cosine similarity > threshold
-//   3. saveWinningPrompt()→ stores a successful prompt's embedding for future checks
+//   2. saveWinningPrompt()→ stores a successful prompt's embedding for future checks
 //
 // Only imported by server-side API routes — never shipped to the browser.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { SupabaseClient } from '@supabase/supabase-js';
 
-const SIMILARITY_THRESHOLD = 0.85; // cosine similarity above this = "too similar"
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'text-embedding-3-large';
 const DEFAULT_EMBEDDING_DIMENSIONS = 1536;
 const parsedEmbeddingDimensions = Number.parseInt(process.env.EMBEDDING_DIMENSIONS ?? '', 10);
@@ -99,40 +97,7 @@ export async function embedText(text: string): Promise<number[]> {
   return normalizeEmbeddingDimensions(data?.data?.[0]?.embedding);
 }
 
-// ── 2. Check if a prompt is too similar to any previously cracked prompt ──────
-// Returns { blocked: true, message } if the prompt is too similar.
-// Returns { blocked: false }         if it's original enough.
-export async function isTooSimilar(
-  supabase: SupabaseClient,
-  stageNumber: number,
-  embedding: number[],
-): Promise<{ blocked: boolean; message?: string }> {
-  // Use Supabase RPC to call our pgvector similarity function
-  const { data, error } = await supabase.rpc('check_prompt_similarity', {
-    p_stage_number: stageNumber,
-    p_embedding: JSON.stringify(embedding), // Supabase RPC receives it as text, cast in SQL
-    p_threshold: SIMILARITY_THRESHOLD,
-  });
-
-  if (error) {
-    // If the RPC fails (e.g. no cracked prompts exist yet), fail open — let the prompt through
-    console.warn('[isTooSimilar] RPC error, failing open:', error.message);
-    return { blocked: false };
-  }
-
-  // RPC returns { is_similar: boolean, similarity: number, matched_at: timestamp }
-  if (data?.is_similar) {
-    const pct = Math.round((data.similarity ?? SIMILARITY_THRESHOLD) * 100);
-    return {
-      blocked: true,
-      message: `🚨 Compliance caught that exploit! (${pct}% match with a known crack). Be more original.`,
-    };
-  }
-
-  return { blocked: false };
-}
-
-// ── 3. Save a winning prompt's embedding to cracked_prompts ──────────────────
+// ── 2. Save a winning prompt's embedding to cracked_prompts ──────────────────
 // Called after a player successfully validates a stage code.
 export async function saveWinningPrompt(
   supabase: SupabaseClient,

@@ -21,12 +21,14 @@ const configuredCorsOrigins = (process.env.CORS_ORIGINS || '')
 	.map((origin) => origin.trim())
 	.filter(Boolean);
 
+if (isProduction && configuredCorsOrigins.length === 0) {
+	throw new Error('CORS_ORIGINS must be set in production (comma-separated list of allowed origins).');
+}
+
 const allowedOrigins =
 	configuredCorsOrigins.length > 0
 		? configuredCorsOrigins
-		: isProduction
-			? []
-			: ['http://localhost:3000', 'http://127.0.0.1:3000'];
+		: ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
 const app = express();
 
@@ -36,6 +38,15 @@ app.set('trust proxy', 1);
 app.use(
 	helmet({
 		crossOriginResourcePolicy: { policy: 'cross-origin' },
+		contentSecurityPolicy: {
+			useDefaults: true,
+			directives: {
+				'default-src': ["'self'"],
+				'frame-ancestors': ["'none'"],
+			},
+		},
+		hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+		frameguard: { action: 'deny' },
 	}),
 );
 

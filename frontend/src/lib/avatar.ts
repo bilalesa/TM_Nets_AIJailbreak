@@ -19,7 +19,3 @@ export function computeTimeBonus(elapsedSeconds: number, baseXP: number): number
   const ratio = 1 - (elapsedSeconds - 60) / 240;
   return Math.round(baseXP * 0.5 * ratio);
 }
-
-export function formatScore(score: number): string {
-  return score.toLocaleString();
-}

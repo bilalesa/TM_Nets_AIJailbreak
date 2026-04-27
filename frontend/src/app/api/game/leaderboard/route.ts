@@ -37,11 +37,12 @@ export async function GET() {
       }
     }
 
-    // 2. Fetch all active players with their scores
+    // 2. Fetch all active players with their scores (excluding banned)
     const { data: players, error: playersError } = await supabase
       .from('players')
       .select('id, username, total_score')
       .eq('session_active', true)
+      .eq('is_banned', false)
       .order('total_score', { ascending: false });
 
     if (playersError) throw playersError;
