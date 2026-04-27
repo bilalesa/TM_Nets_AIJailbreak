@@ -4,10 +4,14 @@ import { LLMOverloadedError, LLMTimeoutError } from '../services/llmService.js';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import { embedText, isPromptTooSimilar } from '../services/embeddingService.js';
 import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
+import { containsProfanity } from '../utils/profanity.js';
 
 const STAGE3_DISALLOWED_PATTERN = /anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/i;
 const STAGE3_REFUSAL_MESSAGE =
   'I can only perform deterministic formatting on the hidden value. I cannot generate puzzles, anagrams, or mixed-order variants.';
+
+const PROFANITY_REFUSAL_MESSAGE =
+  'Your message contains language that is not allowed. Please rephrase and try again.';
 
 function sendError(
   res: Response,
@@ -60,6 +64,29 @@ export const chatPrompt = async (req: Request, res: Response) => {
       return sendError(res, 404, 'Stage not found.', {
         retryable: false,
         code: 'STAGE_NOT_FOUND',
+      });
+    }
+
+    // Profanity guard. Reject before embedding/queueing — log it so admins
+    // can review repeat offenders.
+    if (containsProfanity(userMessage || '')) {
+      supabase
+        .from('prompt_logs')
+        .insert({
+          player_id: user.id,
+          stage_number: stageNumber,
+          prompt_text: userMessage,
+          ai_response: PROFANITY_REFUSAL_MESSAGE,
+          is_successful: false,
+          is_blocked_by_anticheat: true,
+        })
+        .then(({ error }) => {
+          if (error) console.error('[prompt_logs profanity insert]', error);
+        });
+      return res.json({
+        response: PROFANITY_REFUSAL_MESSAGE,
+        status: 'blocked',
+        errorCode: 'PROFANITY_BLOCKED',
       });
     }
 

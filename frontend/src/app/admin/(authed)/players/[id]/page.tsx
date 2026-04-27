@@ -151,6 +151,15 @@ export default function PlayerDetailPage({
             Active
           </span>
         )}
+        {player.is_verified ? (
+          <span className="rounded bg-sky-950/60 px-2 py-0.5 text-xs text-sky-300">
+            Email verified
+          </span>
+        ) : (
+          <span className="rounded bg-amber-950/60 px-2 py-0.5 text-xs text-amber-300">
+            Email unverified
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

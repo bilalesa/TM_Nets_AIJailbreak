@@ -132,15 +132,26 @@ export default function PlayersPage() {
                 <td className="px-4 py-3 text-slate-300">{p.email ?? '—'}</td>
                 <td className="px-4 py-3 text-right font-mono">{p.total_score}</td>
                 <td className="px-4 py-3">
-                  {p.is_banned ? (
-                    <span className="rounded bg-red-950/60 px-2 py-0.5 text-xs text-red-300">
-                      Banned
-                    </span>
-                  ) : (
-                    <span className="rounded bg-emerald-950/60 px-2 py-0.5 text-xs text-emerald-300">
-                      Active
-                    </span>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {p.is_banned ? (
+                      <span className="rounded bg-red-950/60 px-2 py-0.5 text-xs text-red-300">
+                        Banned
+                      </span>
+                    ) : (
+                      <span className="rounded bg-emerald-950/60 px-2 py-0.5 text-xs text-emerald-300">
+                        Active
+                      </span>
+                    )}
+                    {p.is_verified ? (
+                      <span className="rounded bg-sky-950/60 px-2 py-0.5 text-xs text-sky-300">
+                        Verified
+                      </span>
+                    ) : (
+                      <span className="rounded bg-amber-950/60 px-2 py-0.5 text-xs text-amber-300">
+                        Unverified
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-slate-400">
                   {new Date(p.created_at).toLocaleDateString()}
