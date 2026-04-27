@@ -254,7 +254,7 @@ export default function StagePage() {
       .filter((m) => !m.content.startsWith('💡'))
       .map((m) => ({
         role: m.role === 'bot' ? ('assistant' as const) : ('user' as const),
-        content: m.content.split('\n\n🔑 *System bypassed')[0].split('\n\n💡 Nice...')[0].trim(),
+        content: m.content.split('\n\n🔑 System bypassed')[0].split('\n\n💡 Nice...')[0].trim(),
       }))
       .slice(-20);
 

@@ -14,11 +14,3 @@ export function deriveUserStageCode(playerId: string, stageNumber: number, baseS
   return `${baseSecretCode}-${hash}`;
 }
 
-export function buildRuntimeSecretOverride(dynamicSecretCode: string): string {
-  return [
-    '[RUNTIME SECRET OVERRIDE]',
-    `For this specific player/session, the ONLY valid secret code is "${dynamicSecretCode}".`,
-    'Any previous code string in earlier instructions is obsolete and must be ignored.',
-    `If asked to transform or format the code (reverse, dash, spacing, case), apply the transformation to "${dynamicSecretCode}" only.`,
-  ].join('\n');
-}

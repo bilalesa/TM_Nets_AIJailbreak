@@ -60,10 +60,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Parse body
-    const { stageNumber, code, elapsedSeconds } = (await request.json()) as {
+    const { stageNumber, code } = (await request.json()) as {
       stageNumber?: unknown;
       code?: unknown;
-      elapsedSeconds?: unknown;
     };
 
     if (!Number.isInteger(stageNumber)) {
@@ -79,11 +78,6 @@ export async function POST(request: NextRequest) {
     if (typeof code !== 'string' || !code.trim()) {
       return NextResponse.json({ error: 'Code is required' }, { status: 400 });
     }
-
-    const elapsedSecondsSafe =
-      typeof elapsedSeconds === 'number' && Number.isFinite(elapsedSeconds) && elapsedSeconds >= 0
-        ? elapsedSeconds
-        : 0;
 
     // 3. Prevent double-submission
     const { data: existing } = await supabase
@@ -110,24 +104,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ correct: false });
     }
 
-    // 5. Compute score: baseXP + time bonus
-    const timeBonus = computeTimeBonus(elapsedSecondsSafe, stageConfig.baseXP);
+    // 5. Derive started_at from MIN(prompt_logs.created_at) for this player+stage.
+    //    submitted_at is "now". time_taken_seconds is computed server-side so the
+    //    client cannot influence the score via a forged elapsedSeconds.
+    const submittedAt = new Date();
+    const { data: firstPrompt, error: firstPromptError } = await supabase
+      .from('prompt_logs')
+      .select('created_at')
+      .eq('player_id', player.id)
+      .eq('stage_number', parsedStageNumber)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (firstPromptError) throw firstPromptError;
+
+    const startedAt = firstPrompt?.created_at ? new Date(firstPrompt.created_at) : submittedAt;
+    const timeTakenSeconds = Math.max(
+      0,
+      Math.floor((submittedAt.getTime() - startedAt.getTime()) / 1000),
+    );
+
+    // 6. Compute score: baseXP + time bonus
+    const timeBonus = computeTimeBonus(timeTakenSeconds, stageConfig.baseXP);
     const grossScore = stageConfig.baseXP + timeBonus;
     const scoreAwarded = grossScore;
 
-    // 6. Record completion
+    // 7. Record completion
     const { error: completionError } = await supabase
       .from('stage_completions')
       .insert({
         player_id: player.id,
         stage_number: parsedStageNumber,
         score_awarded: scoreAwarded,
-        time_taken_seconds: elapsedSecondsSafe,
+        time_taken_seconds: timeTakenSeconds,
+        started_at: startedAt.toISOString(),
+        submitted_at: submittedAt.toISOString(),
       });
 
     if (completionError) throw completionError;
 
-    // 7. Update total_score on the player row (increment)
+    // 8. Update total_score on the player row (increment)
     const { error: scoreError } = await supabase.rpc('increment_player_score', {
       p_player_id: player.id,
       p_amount: scoreAwarded,
@@ -147,7 +164,7 @@ export async function POST(request: NextRequest) {
         .eq('id', player.id);
     }
 
-    // 8. Mark the most recent prompt log as successful
+    // 9. Mark the most recent prompt log as successful
     supabase
       .from('prompt_logs')
       .update({ is_successful: true })
@@ -159,7 +176,7 @@ export async function POST(request: NextRequest) {
         if (error) console.error('[prompt_logs update]', error);
       });
 
-    // 9. Anti-cheat: Find the user's longest prompt for this stage and embed it.
+    // 10. Anti-cheat: Find the user's longest prompt for this stage and embed it.
     // This happens async after we've already responded — no latency hit for the player.
     (async () => {
       try {
@@ -203,7 +220,7 @@ export async function POST(request: NextRequest) {
       }
     })();
 
-    // 10. Broadcast score_updated event to Supabase Realtime
+    // 11. Broadcast score_updated event to Supabase Realtime
     // This notifies all leaderboard subscribers to re-fetch — zero polling needed.
     // Fire-and-forget: don't await so it doesn't add latency to the response.
     broadcastScoreUpdated({ playerId: player.id, stageNumber: parsedStageNumber, scoreAwarded })

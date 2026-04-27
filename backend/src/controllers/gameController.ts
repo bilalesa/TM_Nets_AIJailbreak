@@ -1,12 +1,7 @@
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
-import {
-  generateAIResponse,
-  LLMOverloadedError,
-  LLMTimeoutError,
-} from '../services/llmService.js';
+import { LLMOverloadedError, LLMTimeoutError } from '../services/llmService.js';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
-import { buildRuntimeSecretOverride, deriveUserStageCode } from '../utils/stageCode.js';
 import { embedText, isPromptTooSimilar } from '../services/embeddingService.js';
 import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
 
@@ -26,94 +21,6 @@ function sendError(
     errorCode: options?.code,
   });
 }
-
-export const submitPrompt = async (req: Request, res: Response) => {
-  try {
-    const user = req.user;
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const { stageNumber, promptText } = req.body;
-
-    // 1. Validate Input
-    if (!stageNumber || !promptText) {
-      return res.status(400).json({ error: 'Stage number and prompt text are required.' });
-    }
-
-    const stageConfig = SERVER_STAGE_CONFIGS.find((s) => s.number === stageNumber);
-    if (!stageConfig) {
-      return res.status(404).json({ error: 'Stage not found.' });
-    }
-
-    const expectedCode = deriveUserStageCode(user.id, stageNumber, stageConfig.secretCode);
-    const runtimeSystemPrompt = `${stageConfig.systemPrompt}\n\n${buildRuntimeSecretOverride(expectedCode, stageNumber, stageConfig.secretCode)}`;
-
-    // 2. Call the AI Service
-    // We pass the specific "Fortress & Flaw" prompt and the user's hacking attempt
-    const aiResponse = await generateAIResponse(runtimeSystemPrompt, promptText);
-
-    // 3. Check the Win Condition
-    // If the AI's response contains the secret code, the player wins!
-    const isSuccessful = aiResponse.toLowerCase().includes(expectedCode.toLowerCase());
-
-    // 4. Log the Attempt (The Audit Trail)
-    // We log every attempt so you can review the craziest hacks after the event
-    await supabase.from('prompt_logs').insert({
-      player_id: user.id,
-      stage_number: stageNumber,
-      prompt_text: promptText,
-      ai_response: aiResponse,
-      is_successful: isSuccessful
-    });
-
-    // 5. Award Points (If Successful)
-    let alreadyCompleted = false;
-    if (isSuccessful) {
-      // Try to insert the completion. 
-      // The UNIQUE(player_id, stage_number) constraint we built earlier 
-      // ensures they don't get double points if they beat it twice.
-      const { error: completionError } = await supabase.from('stage_completions').insert({
-        player_id: user.id,
-        stage_number: stageNumber,
-        score_awarded: stageConfig.baseXP,
-        time_taken_seconds: 0 // You can calculate this later if you add a timer
-      });
-
-      if (completionError && completionError.code === '23505') {
-        // 23505 is the Postgres code for "Unique Violation"
-        alreadyCompleted = true; 
-      } else if (!completionError) {
-        // First time beating it! Update their total score cache on the player profile.
-        // We use an RPC (Remote Procedure Call) or a simple read/write. 
-        // For MVP, we'll read the current score and add to it:
-        const { data: playerData } = await supabase.from('players').select('total_score').eq('id', user.id).single();
-        const newScore = (playerData?.total_score || 0) + stageConfig.baseXP;
-        await supabase.from('players').update({ total_score: newScore }).eq('id', user.id);
-      }
-    }
-
-    // 6. Send the result back to the Hacker Terminal
-    return res.json({
-      aiResponse,
-      isSuccessful,
-      alreadyCompleted,
-      message: isSuccessful ? `System bypassed! Code ${expectedCode} acquired.` : 'Access Denied.'
-    });
-
-  } catch (error: unknown) {
-    if (error instanceof LLMOverloadedError) {
-      return res.status(503).json({ error: 'Service busy. Please retry in a few seconds.' });
-    }
-
-    if (error instanceof LLMTimeoutError) {
-      return res.status(504).json({ error: 'AI service timed out. Please try again.' });
-    }
-
-    console.error('Game Controller Error:', error);
-    return res.status(500).json({ error: 'An error occurred while processing your hack.' });
-  }
-};
 
 export const chatPrompt = async (req: Request, res: Response) => {
   try {
