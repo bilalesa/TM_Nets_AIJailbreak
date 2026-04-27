@@ -1,13 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { containsProfanity } from '../utils/profanity.js';
-import { isDisposableEmailDomain } from '../utils/disposableEmails.js';
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_\-. ]+$/;
 const MIN_LENGTH = 2;
 const MAX_LENGTH = 30;
 
-// RFC 5322-lite. Good enough for signup; the verification code is what
-// actually proves ownership.
+// RFC 5322-lite. Basic format check only — emails are not verified.
 const EMAIL_PATTERN = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
 export function validateUsernameInput(req: Request, res: Response, next: NextFunction) {
@@ -62,12 +60,6 @@ export function validateEmailInput(req: Request, res: Response, next: NextFuncti
 
   if (!EMAIL_PATTERN.test(normalized)) {
     return res.status(400).json({ error: 'Email format is invalid' });
-  }
-
-  if (isDisposableEmailDomain(normalized)) {
-    return res.status(400).json({
-      error: 'Disposable email addresses are not allowed',
-    });
   }
 
   req.body.email = normalized;

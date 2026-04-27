@@ -45,6 +45,14 @@ export default function StagesPage() {
 
       {loading ? (
         <div className="text-slate-400">Loading…</div>
+      ) : stages.length === 0 ? (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+          No stages found. Run{' '}
+          <code className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-200">
+            db/migrations/20260428_seed_stage_configs.sql
+          </code>{' '}
+          against your Supabase instance to populate the <code>stage_configs</code> table.
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {stages.map((s) => (

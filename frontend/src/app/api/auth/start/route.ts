@@ -1,10 +1,33 @@
 // frontend/src/app/api/auth/start/route.ts
-// Forwards { username, email } to the Express backend, which sends a 6-digit
-// verification code via email. No JWT is issued at this step — the client must
-// follow up with POST /api/auth/verify.
+// Forwards { username, email } to the Express backend, which immediately
+// issues a JWT. The token is stored as an http-only cookie.
 
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { getSupabaseServerClient } from '@/lib/supabaseClient';
 import { getBackendBaseUrl } from '@/lib/backendUrl';
+
+const supabase = getSupabaseServerClient();
+
+async function broadcastPlayerJoined(username: string) {
+  const channel = supabase.channel('leaderboard-updates');
+  const safePayload = { username, sentAt: new Date().toISOString() };
+
+  const maybeHttpSend = (
+    channel as unknown as {
+      httpSend?: (event: string, payload: unknown) => Promise<unknown>;
+    }
+  ).httpSend;
+  if (typeof maybeHttpSend === 'function') {
+    return maybeHttpSend.call(channel, 'player_joined', safePayload);
+  }
+
+  return channel.send({
+    type: 'broadcast' as const,
+    event: 'player_joined',
+    payload: safePayload,
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -54,11 +77,22 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({
-      verificationRequired: true,
-      email: data.email,
-      expiresInSeconds: data.expiresInSeconds,
+    const cookieStore = await cookies();
+    cookieStore.set({
+      name: 'game_session_token',
+      value: data.token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24,
+      path: '/',
     });
+
+    broadcastPlayerJoined(data.username)
+      .then(() => {})
+      .catch((err: unknown) => console.warn('[broadcast player_joined]', err));
+
+    return NextResponse.json({ success: true, username: data.username });
   } catch (error) {
     console.error('[/api/auth/start]', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

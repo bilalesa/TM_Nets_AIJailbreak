@@ -12,6 +12,7 @@ import {
   Timer,
   RefreshCw,
 } from 'lucide-react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { cn } from '@/lib/utils';
 import Sidebar from '@/components/game/Sidebar';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
@@ -42,6 +43,15 @@ interface PlayerState {
   username: string;
   totalScore: number;
   completedStages: number[];
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────────
+
+function formatTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(' : ');
 }
 
 // ── Rank decorators ────────────────────────────────────────────────────────────
@@ -84,7 +94,8 @@ export default function LeaderboardPage() {
   const router = useRouter();
 
   // ── States ────────────────────────────────────────────────────────────────
-  const [supabaseClient, setSupabaseClient] = useState<any>(null);
+  const [supabaseClient, setSupabaseClient] = useState<SupabaseClient | null>(null);
+  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState<CurrentPlayer | null>(null);
   const [totalPlayers, setTotalPlayers] = useState(0);
@@ -94,11 +105,10 @@ export default function LeaderboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPlayer, setSidebarPlayer] = useState<PlayerState | null>(null);
 
-  // ── Initialize Supabase client safely in browser ──────────────────────────
+  // ── Initialize Supabase browser client ─────────────────────────────────────
   useEffect(() => {
     try {
-      const client = getSupabaseBrowserClient();
-      setSupabaseClient(client);
+      setSupabaseClient(getSupabaseBrowserClient());
     } catch (err) {
       console.error('Supabase init failed:', err);
     }
@@ -116,20 +126,117 @@ export default function LeaderboardPage() {
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
 
-  // ── Fetch leaderboard ──────────────────────────────────────────────────────
-  const fetchLeaderboard = useCallback(
-    async (silent = false) => {
-      if (!silent) setIsRefreshing(true);
+  // ── Load current player profile (also gives us the id for highlighting) ───
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
       try {
-        const res = await fetch('/api/game/leaderboard');
+        const res = await fetch('/api/game/player');
         if (res.status === 401) {
           router.replace('/');
           return;
         }
+        if (!res.ok) return;
         const data = await res.json();
-        setLeaderboard(data.leaderboard ?? []);
-        setCurrentPlayer(data.currentPlayer ?? null);
-        setTotalPlayers(data.totalPlayers ?? 0);
+        if (cancelled) return;
+        setCurrentPlayerId(data.player.id);
+        setSidebarPlayer({
+          username: data.player.username,
+          totalScore: data.player.total_score,
+          completedStages: data.completedStages ?? [],
+        });
+      } catch (err) {
+        console.error('[leaderboard /api/game/player]', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  // ── Fetch leaderboard directly from Supabase ──────────────────────────────
+  const fetchLeaderboard = useCallback(
+    async (silent = false) => {
+      if (!supabaseClient) return;
+      if (!silent) setIsRefreshing(true);
+      try {
+        const { data: players, error: playersError } = await supabaseClient
+          .from('players')
+          .select('id, username, total_score')
+          .eq('session_active', true)
+          .eq('is_banned', false)
+          .order('total_score', { ascending: false });
+
+        if (playersError) throw playersError;
+
+        if (!players || players.length === 0) {
+          setLeaderboard([]);
+          setCurrentPlayer(null);
+          setTotalPlayers(0);
+          return;
+        }
+
+        const playerIds = players.map((p) => p.id);
+        const { data: completions, error: completionsError } = await supabaseClient
+          .from('stage_completions')
+          .select('player_id, time_taken_seconds')
+          .in('player_id', playerIds);
+
+        if (completionsError) throw completionsError;
+
+        const completionMap = new Map<
+          string,
+          { stagesPassed: number; totalSeconds: number }
+        >();
+        for (const c of completions ?? []) {
+          const existing = completionMap.get(c.player_id) ?? {
+            stagesPassed: 0,
+            totalSeconds: 0,
+          };
+          completionMap.set(c.player_id, {
+            stagesPassed: existing.stagesPassed + 1,
+            totalSeconds: existing.totalSeconds + c.time_taken_seconds,
+          });
+        }
+
+        const ranked = players
+          .map((p) => {
+            const agg = completionMap.get(p.id) ?? {
+              stagesPassed: 0,
+              totalSeconds: 0,
+            };
+            return {
+              id: p.id,
+              username: p.username,
+              totalScore: p.total_score,
+              stagesPassed: agg.stagesPassed,
+              totalSeconds: agg.totalSeconds,
+              totalTimeFormatted: formatTime(agg.totalSeconds),
+              isCurrentPlayer: p.id === currentPlayerId,
+            };
+          })
+          .sort((a, b) => {
+            if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+            return a.totalSeconds - b.totalSeconds;
+          })
+          .map((p, i) => ({ ...p, rank: i + 1 }));
+
+        setLeaderboard(ranked);
+        setTotalPlayers(ranked.length);
+
+        const me = ranked.find((p) => p.isCurrentPlayer) ?? null;
+        setCurrentPlayer(
+          me
+            ? {
+                id: me.id,
+                username: me.username,
+                totalScore: me.totalScore,
+                stagesPassed: me.stagesPassed,
+                totalTimeFormatted: me.totalTimeFormatted,
+                rank: me.rank,
+              }
+            : null,
+        );
       } catch (err) {
         console.error('[leaderboard fetch]', err);
       } finally {
@@ -137,29 +244,12 @@ export default function LeaderboardPage() {
         setIsRefreshing(false);
       }
     },
-    [router]
+    [supabaseClient, currentPlayerId],
   );
 
-  // ── Fetch sidebar player info ──────────────────────────────────────────────
+  // ── Real-time subscription + initial fetch ────────────────────────────────
   useEffect(() => {
-    async function loadSidebarPlayer() {
-      try {
-        const res = await fetch('/api/game/player');
-        if (!res.ok) return;
-        const data = await res.json();
-        setSidebarPlayer({
-          username: data.player.username,
-          totalScore: data.player.total_score,
-          completedStages: data.completedStages ?? [],
-        });
-      } catch {}
-    }
-    loadSidebarPlayer();
-  }, []);
-
-  // ── Real-time subscription ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!supabaseClient) return; // wait until client initialized
+    if (!supabaseClient) return;
 
     fetchLeaderboard(false);
 
