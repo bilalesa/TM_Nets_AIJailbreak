@@ -111,6 +111,9 @@ export default function StagePage() {
   // ── Stage already completed? ──────────────────────────────────────────────
   const isStageCompleted = player?.completedStages.includes(stageId) ?? false;
 
+  // ── Code extracted (AI revealed the code)? ────────────────────────────────
+  const codeExtracted = messages.some((m) => m.role === 'bot' && m.content.includes('🔑 System bypassed'));
+
   // ── Stopwatch ─────────────────────────────────────────────────────────────
   const { elapsed, formatted, running, start: startTimer, stop: stopTimer } =
     useStopwatch(false, `stage-${stageId}-timer`);
@@ -226,7 +229,7 @@ export default function StagePage() {
   // ── 4. Send message ───────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || isSending || isStageCompleted) return;
+    if (!text || isSending || isStageCompleted || codeExtracted) return;
 
     // Start timer on first message
     if (!timerStarted) {
@@ -373,7 +376,7 @@ export default function StagePage() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [input, isSending, isStageCompleted, timerStarted, startTimer, messages, stageId]);
+  }, [input, isSending, isStageCompleted, codeExtracted, timerStarted, startTimer, messages, stageId]);
 
   // ── 5. Handle stage success ───────────────────────────────────────────────
   const handleCodeSuccess = useCallback(
@@ -649,7 +652,7 @@ export default function StagePage() {
             <div
               className={cn(
                 'bg-white/10 backdrop-blur-xl rounded-2xl border shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150',
-                isStageCompleted
+                isStageCompleted || codeExtracted
                   ? 'bg-white/8 border-white/15 shadow-[0_6px_18px_rgba(0,0,0,0.2)]'
                   : 'border-white/20 focus-within:border-[#D71920]/50 focus-within:shadow-[0_10px_30px_rgba(0,0,0,0.25)]',
               )}
@@ -667,13 +670,15 @@ export default function StagePage() {
                 placeholder={
                   isStageCompleted
                     ? 'Stage completed — move to the next challenge!'
+                    : codeExtracted
+                    ? 'Code extracted — enter it above to complete the stage!'
                     : 'Send a prompt…'
                 }
-                disabled={isStageCompleted || isSending}
+                disabled={isStageCompleted || codeExtracted || isSending}
                 rows={2}
                 className={cn(
                   'w-full px-4 pt-3 pb-1 bg-transparent resize-none text-base sm:text-sm outline-none leading-relaxed',
-                  isStageCompleted
+                  isStageCompleted || codeExtracted
                     ? 'text-gray-400 placeholder:text-gray-500/90 cursor-not-allowed'
                     : 'text-gray-100 placeholder:text-gray-400',
                 )}
@@ -681,17 +686,17 @@ export default function StagePage() {
               <div className="flex items-center justify-end px-3 pb-3">
                 <motion.button
                   onClick={sendMessage}
-                  disabled={!input.trim() || isSending || isStageCompleted}
+                  disabled={!input.trim() || isSending || isStageCompleted || codeExtracted}
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.96 }}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-150',
-                    input.trim() && !isSending && !isStageCompleted
+                    input.trim() && !isSending && !isStageCompleted && !codeExtracted
                       ? 'bg-[#D71920] hover:bg-[#B1141A]'
                       : 'bg-gray-300 text-gray-500 border border-gray-300 cursor-not-allowed',
                   )}
                   style={
-                    input.trim() && !isSending
+                    input.trim() && !isSending && !codeExtracted
                       ? { boxShadow: '0 6px 18px rgba(215,25,32,0.35)' }
                       : {}
                   }
