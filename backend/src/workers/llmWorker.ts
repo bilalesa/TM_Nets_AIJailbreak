@@ -99,7 +99,7 @@ function createWorker(instanceNumber: number) {
   const worker = new Worker<LLMChatJobData, LLMChatJobResult>(
     llmQueueName,
     async (job) => {
-      const { playerId, stageNumber, userMessage, messages, embedding } = job.data;
+      const { playerId, stageNumber, userMessage, messages } = job.data;
 
       const stageConfig = SERVER_STAGE_CONFIGS[stageNumber - 1];
       if (!stageConfig) {
@@ -164,7 +164,6 @@ function createWorker(instanceNumber: number) {
         ai_response: aiResponse,
         is_successful: isSuccessful,
         is_blocked_by_anticheat: false,
-        embedding: embedding ?? null,
       });
 
       return { response: aiResponse };

@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const search = url.searchParams.get('search')?.trim() ?? '';
-    const limit = Math.min(Number(url.searchParams.get('limit') ?? '50'), 200);
+    const limit = Math.min(Number(url.searchParams.get('limit') ?? '25'), 100);
     const offset = Math.max(Number(url.searchParams.get('offset') ?? '0'), 0);
     const filter = url.searchParams.get('filter') ?? 'all'; // 'all' | 'banned' | 'active'
 

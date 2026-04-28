@@ -33,7 +33,13 @@ const allowedOrigins =
 const app = express();
 
 app.disable('x-powered-by');
-app.set('trust proxy', 1);
+// Two trusted proxy hops in production:
+//   client → Vercel edge (frontend rewrite) → nginx → express
+// `trust proxy: 1` would only strip nginx, leaving req.ip resolved to the
+// Vercel egress IP (a tiny pool — that's why audit views were showing the
+// same 1–2 IPs for every player). Setting this to 2 walks back one more
+// hop in X-Forwarded-For so req.ip is the real client address.
+app.set('trust proxy', 2);
 
 app.use(
 	helmet({

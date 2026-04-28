@@ -14,7 +14,7 @@ interface AuditEntry {
   admin_users: { email: string; name: string | null } | null;
 }
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 25;
 
 export default function AuditPage() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);

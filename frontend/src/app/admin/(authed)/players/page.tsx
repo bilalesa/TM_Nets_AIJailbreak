@@ -17,7 +17,7 @@ interface Player {
 
 type Filter = 'all' | 'active' | 'banned';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);

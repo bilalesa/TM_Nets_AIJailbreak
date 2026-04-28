@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     await requireAdmin();
 
     const url = new URL(request.url);
-    const limit = Math.min(Number(url.searchParams.get('limit') ?? '100'), 500);
+    const limit = Math.min(Number(url.searchParams.get('limit') ?? '25'), 200);
     const offset = Math.max(Number(url.searchParams.get('offset') ?? '0'), 0);
     const action = url.searchParams.get('action');
     const adminId = url.searchParams.get('adminId');

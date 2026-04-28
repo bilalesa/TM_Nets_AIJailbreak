@@ -177,17 +177,12 @@ export async function POST(request: NextRequest) {
         .eq('id', player.id);
     }
 
-    // 9. Mark the most recent prompt log as successful
-    supabase
-      .from('prompt_logs')
-      .update({ is_successful: true })
-      .eq('player_id', player.id)
-      .eq('stage_number', parsedStageNumber)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .then(({ error }) => {
-        if (error) console.error('[prompt_logs update]', error);
-      });
+    // 9. (Removed) Marking the most-recent prompt log as successful is now
+    // done inline by the LLM worker at insert time (see llmWorker.ts) — the
+    // worker has the authoritative isSuccessful signal. The previous UPDATE
+    // here was both redundant and slightly buggy: it picked the most recent
+    // prompt log, which isn't necessarily the winning prompt if the player
+    // kept chatting after seeing the secret in an earlier response.
 
     // 10. Anti-cheat: Find the user's longest prompt for this stage and embed it.
     // This happens async after we've already responded — no latency hit for the player.

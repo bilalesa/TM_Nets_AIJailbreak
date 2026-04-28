@@ -18,7 +18,6 @@ export interface LLMChatJobData {
   stageNumber: number;
   userMessage: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-  embedding: number[] | null;
 }
 
 export interface LLMChatJobResult {

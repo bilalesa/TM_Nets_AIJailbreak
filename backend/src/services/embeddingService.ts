@@ -54,6 +54,50 @@ export async function embedText(text: string): Promise<number[]> {
   return normalizeEmbeddingDimensions(data?.data?.[0]?.embedding);
 }
 
+// Per-stage cache for "does this stage have any cracked prompts yet?". Lets the
+// chat path skip the embedding API call + similarity RPC entirely while a
+// stage has zero cracks (the common case for early sessions). Once a stage
+// flips to true we keep that forever (cracked rows never get deleted within
+// a day). False values get a short TTL so a fresh crack becomes effective
+// within ~10s without hammering the DB.
+const NEGATIVE_TTL_MS = 10_000;
+const stageHasCrackedCache = new Map<number, { hasCracks: boolean; expiresAt: number }>();
+
+export function invalidateStageCrackedCache(stageNumber?: number): void {
+  if (stageNumber === undefined) {
+    stageHasCrackedCache.clear();
+    return;
+  }
+  stageHasCrackedCache.delete(stageNumber);
+}
+
+export async function stageHasCrackedPrompts(stageNumber: number): Promise<boolean> {
+  const now = Date.now();
+  const cached = stageHasCrackedCache.get(stageNumber);
+  if (cached && (cached.hasCracks || cached.expiresAt > now)) {
+    return cached.hasCracks;
+  }
+
+  const { count, error } = await supabase
+    .from('cracked_prompts')
+    .select('id', { count: 'exact', head: true })
+    .eq('stage_number', stageNumber)
+    .limit(1);
+
+  if (error) {
+    // Fail open — assume cracks exist so similarity check still runs.
+    console.warn('[stageHasCrackedPrompts] count error, failing open:', error.message);
+    return true;
+  }
+
+  const hasCracks = (count ?? 0) > 0;
+  stageHasCrackedCache.set(stageNumber, {
+    hasCracks,
+    expiresAt: hasCracks ? Number.POSITIVE_INFINITY : now + NEGATIVE_TTL_MS,
+  });
+  return hasCracks;
+}
+
 export async function isPromptTooSimilar(stageNumber: number, embedding: number[]): Promise<{
   blocked: boolean;
   message?: string;

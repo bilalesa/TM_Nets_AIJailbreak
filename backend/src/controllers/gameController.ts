@@ -2,7 +2,11 @@ import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { LLMOverloadedError, LLMTimeoutError } from '../services/llmService.js';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
-import { embedText, isPromptTooSimilar } from '../services/embeddingService.js';
+import {
+  embedText,
+  isPromptTooSimilar,
+  stageHasCrackedPrompts,
+} from '../services/embeddingService.js';
 import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
 import { containsProfanity } from '../utils/profanity.js';
 
@@ -100,28 +104,32 @@ export const chatPrompt = async (req: Request, res: Response) => {
       });
     }
 
-    let embedding: number[] | null = null;
+    // Skip the embedding call + similarity RPC entirely when the stage has
+    // zero cracked prompts — there's nothing to compare against, and the
+    // embedding API + pgvector query are the heaviest part of the chat
+    // path. Cache hit is in-process, ~10s negative TTL.
     try {
-      embedding = await embedText(userMessage);
-      const similarityCheck = await isPromptTooSimilar(stageNumber, embedding);
+      if (await stageHasCrackedPrompts(stageNumber)) {
+        const embedding = await embedText(userMessage);
+        const similarityCheck = await isPromptTooSimilar(stageNumber, embedding);
 
-      if (similarityCheck.blocked) {
-        supabase
-          .from('prompt_logs')
-          .insert({
-            player_id: user.id,
-            stage_number: stageNumber,
-            prompt_text: userMessage,
-            ai_response: similarityCheck.message,
-            is_successful: false,
-            is_blocked_by_anticheat: true,
-            embedding,
-          })
-          .then(({ error }) => {
-            if (error) console.error('[prompt_logs anticheat insert]', error);
-          });
+        if (similarityCheck.blocked) {
+          supabase
+            .from('prompt_logs')
+            .insert({
+              player_id: user.id,
+              stage_number: stageNumber,
+              prompt_text: userMessage,
+              ai_response: similarityCheck.message,
+              is_successful: false,
+              is_blocked_by_anticheat: true,
+            })
+            .then(({ error }) => {
+              if (error) console.error('[prompt_logs anticheat insert]', error);
+            });
 
-        return res.json({ response: similarityCheck.message });
+          return res.json({ response: similarityCheck.message });
+        }
       }
     } catch (embeddingError) {
       console.warn('[chatPrompt] Embedding failed, skipping anti-cheat:', embeddingError);
@@ -132,7 +140,6 @@ export const chatPrompt = async (req: Request, res: Response) => {
       stageNumber,
       userMessage,
       messages,
-      embedding,
     });
 
     return res.json({ jobId: chatJob.id, status: 'queued' });
