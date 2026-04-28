@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
 import { deriveUserStageCode } from '@/lib/stageCode';
 import { computeTimeBonus } from '@/lib/avatar';
-import { embedText, saveWinningPrompt } from '@/lib/embeddings';
+import { hashPrompt } from '@/lib/promptHash';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
 import { getPlayerFromCookie } from '@/lib/playerSession';
 
@@ -193,47 +193,52 @@ export async function POST(request: NextRequest) {
     // prompt log, which isn't necessarily the winning prompt if the player
     // kept chatting after seeing the secret in an earlier response.
 
-    // 10. Anti-cheat: Find the user's longest prompt for this stage and embed it.
-    // This happens async after we've already responded — no latency hit for the player.
+    // 10. Anti-cheat: save the actual cracking prompt for copy-paste detection.
+    // We pull the row that the LLM worker flagged as is_successful (the prompt
+    // that elicited the secret), normalize + hash it, and store the hash on
+    // cracked_prompts. The chat path then does an indexed equality lookup
+    // against this hash. Fire-and-forget: doesn't block the response.
     (async () => {
       try {
-        const hasEmbeddingKey = Boolean(process.env.EMBEDDING_API_KEY || process.env.LLM_API_KEY);
-        if (!hasEmbeddingKey) {
-          console.warn('[validate-code] Embedding key missing; skipping winning embedding save.');
-          return;
-        }
-
-        // Fetch their prompt logs for this stage to find the longest one
-        const { data: prompts } = await supabase
+        const { data: winningPromptRow } = await supabase
           .from('prompt_logs')
           .select('prompt_text')
           .eq('player_id', player.id)
-          .eq('stage_number', parsedStageNumber);
+          .eq('stage_number', parsedStageNumber)
+          .eq('is_successful', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (!prompts || prompts.length === 0) return;
-
-        // Get the longest prompt. Minimum 20 chars to avoid generic words like "yes"
-        const longestPrompt = prompts
-          .map(p => p.prompt_text.trim())
-          .filter(text => text.length >= 20)
-          .reduce((a, b) => a.length >= b.length ? a : b, '');
-
-        if (!longestPrompt) {
-          console.warn('[validate-code] No prompt long enough to save for anti-cheat.');
+        const winningPrompt = winningPromptRow?.prompt_text?.trim();
+        if (!winningPrompt) {
+          console.warn(
+            `[validate-code] No is_successful prompt found for player=${player.id} stage=${parsedStageNumber}; skipping anti-cheat save.`,
+          );
           return;
         }
 
-        const embedding = await embedText(longestPrompt);
-        await saveWinningPrompt(
-          supabase,
-          player.id,
-          parsedStageNumber,
-          longestPrompt,
-          embedding,
-        );
+        const textHash = hashPrompt(winningPrompt);
+        if (!textHash) {
+          console.warn('[validate-code] Winning prompt normalized to empty string; skipping save.');
+          return;
+        }
+
+        const { error: insertError } = await supabase
+          .from('cracked_prompts')
+          .insert({
+            player_id: player.id,
+            stage_number: parsedStageNumber,
+            prompt_text: winningPrompt,
+            text_hash: textHash,
+          });
+
+        if (insertError) {
+          console.error('[validate-code] Failed to save cracked prompt:', insertError.message);
+        }
       } catch (err) {
-        // Non-fatal — don't let embedding failure block the win
-        console.error('[validate-code] Failed to save winning embedding:', err);
+        // Non-fatal — don't let the anti-cheat save block the win.
+        console.error('[validate-code] Failed to save winning prompt hash:', err);
       }
     })();
 

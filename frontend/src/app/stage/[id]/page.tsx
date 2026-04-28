@@ -172,6 +172,14 @@ export default function StagePage() {
   }, [stageId, router]);
 
   // ── 2. Load or seed messages ──────────────────────────────────────
+  // Hydration order:
+  //   1. sessionStorage (same-tab continuation, fastest)
+  //   2. /api/game/stage-history (rehydrate after a recovery-code re-login
+  //      in a fresh tab — sessionStorage is empty but the player has prior
+  //      prompt_logs for this stage, and the server-authoritative timer is
+  //      already running. Without this fetch the player would lose the
+  //      LLM context and keep paying the full time penalty.)
+  //   3. Seed opening message (genuinely first visit)
   useEffect(() => {
     if (!stageConfig) return;
 
@@ -196,15 +204,50 @@ export default function StagePage() {
       }
     }
 
-    // Seed opening message if no saved messages or parsing failed
-    setMessages([
-      {
-        id: uid(),
-        role: 'bot',
-        content: stageConfig.openingMessage,
-        timestamp: Date.now(),
-      },
-    ]);
+    // No sessionStorage hit — check the server for prior prompts.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/game/stage-history?stage=${stageId}`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(`stage-history ${res.status}`);
+        const data = (await res.json()) as { messages?: Message[] };
+        if (cancelled) return;
+
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          // Prepend the opening message so the conversation reads naturally.
+          setMessages([
+            {
+              id: uid(),
+              role: 'bot',
+              content: stageConfig.openingMessage,
+              timestamp: data.messages[0].timestamp - 1,
+            },
+            ...data.messages,
+          ]);
+          // The player already has prompts logged → timer is server-running.
+          setTimerStarted(true);
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to rehydrate stage history from server:', e);
+      }
+
+      if (cancelled) return;
+      setMessages([
+        {
+          id: uid(),
+          role: 'bot',
+          content: stageConfig.openingMessage,
+          timestamp: Date.now(),
+        },
+      ]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [stageId, stageConfig]);
 
   // Persist messages across reloads

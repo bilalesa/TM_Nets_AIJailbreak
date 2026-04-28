@@ -3,8 +3,7 @@ import { supabase } from '../config/supabase.js';
 import { LLMOverloadedError, LLMTimeoutError } from '../services/llmService.js';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import {
-  embedText,
-  isPromptTooSimilar,
+  isPromptCopyPaste,
   stageHasCrackedPrompts,
 } from '../services/embeddingService.js';
 import { enqueueChatJob, getQueueMetrics, llmQueue } from '../services/llmQueueService.js';
@@ -104,23 +103,22 @@ export const chatPrompt = async (req: Request, res: Response) => {
       });
     }
 
-    // Skip the embedding call + similarity RPC entirely when the stage has
-    // zero cracked prompts — there's nothing to compare against, and the
-    // embedding API + pgvector query are the heaviest part of the chat
-    // path. Cache hit is in-process, ~10s negative TTL.
+    // Anti-cheat: copy-paste detection. We hash a normalized form of the
+    // prompt and look it up against past winning prompts for this stage.
+    // Skip entirely when no cracks exist yet (the common early-session
+    // case). Cache hit is in-process, ~10s negative TTL.
     try {
       if (await stageHasCrackedPrompts(stageNumber)) {
-        const embedding = await embedText(userMessage);
-        const similarityCheck = await isPromptTooSimilar(stageNumber, embedding);
+        const copyPasteCheck = await isPromptCopyPaste(stageNumber, userMessage);
 
-        if (similarityCheck.blocked) {
+        if (copyPasteCheck.blocked) {
           supabase
             .from('prompt_logs')
             .insert({
               player_id: user.id,
               stage_number: stageNumber,
               prompt_text: userMessage,
-              ai_response: similarityCheck.message,
+              ai_response: copyPasteCheck.message,
               is_successful: false,
               is_blocked_by_anticheat: true,
             })
@@ -128,11 +126,11 @@ export const chatPrompt = async (req: Request, res: Response) => {
               if (error) console.error('[prompt_logs anticheat insert]', error);
             });
 
-          return res.json({ response: similarityCheck.message });
+          return res.json({ response: copyPasteCheck.message });
         }
       }
-    } catch (embeddingError) {
-      console.warn('[chatPrompt] Embedding failed, skipping anti-cheat:', embeddingError);
+    } catch (anticheatError) {
+      console.warn('[chatPrompt] Anti-cheat lookup failed, skipping:', anticheatError);
     }
 
     const chatJob = await enqueueChatJob({

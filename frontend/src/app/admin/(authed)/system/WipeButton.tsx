@@ -12,7 +12,7 @@ interface WipeResult {
   players_deleted?: number;
   stage_completions_deleted?: number;
   prompt_logs_deleted?: number;
-  cracked_prompts_anonymised?: number;
+  cracked_prompts_deleted?: number;
   duration_ms?: number;
   wiped_at?: string;
 }
@@ -100,7 +100,7 @@ export default function WipeButton() {
             <li>{result.players_deleted ?? 0} players deleted</li>
             <li>{result.stage_completions_deleted ?? 0} stage completions deleted</li>
             <li>{result.prompt_logs_deleted ?? 0} prompt logs deleted</li>
-            <li>{result.cracked_prompts_anonymised ?? 0} cracked prompts anonymised</li>
+            <li>{result.cracked_prompts_deleted ?? 0} cracked prompts deleted</li>
             {typeof result.duration_ms === 'number' && (
               <li>{result.duration_ms} ms</li>
             )}

@@ -1,64 +1,24 @@
 import { supabase } from '../config/supabase.js';
+import { hashPrompt } from '../utils/promptHash.js';
 
-const SIMILARITY_THRESHOLD = 0.85;
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'text-embedding-3-large';
-const DEFAULT_EMBEDDING_DIMENSIONS = 1536;
-const parsedEmbeddingDimensions = Number.parseInt(process.env.EMBEDDING_DIMENSIONS ?? '', 10);
-const EMBEDDING_DIMENSIONS = Number.isFinite(parsedEmbeddingDimensions) && parsedEmbeddingDimensions > 0
-  ? parsedEmbeddingDimensions
-  : DEFAULT_EMBEDDING_DIMENSIONS;
-const EMBEDDING_ENDPOINT = `${process.env.LLM_API_ENDPOINT}/embeddings`;
-const EMBEDDING_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+// Anti-cheat: copy-paste detection via normalized-text hash.
+//
+// Earlier versions of this file used embedding-based cosine similarity at
+// threshold 0.85. That implementation conflated "two players had the same
+// idea" with "one player copy-pasted from another", because every working
+// jailbreak prompt clusters in the same instruction-style semantic region.
+// At a booth event the only abuse vector we actually want to catch is one
+// player typing a prompt they read off another player's screen, so we now
+// hash a normalized form of the prompt and do an indexed equality lookup
+// against past winning prompts.
+//
+// The file name is kept for git-history continuity; the embedding code is
+// gone but `embedText` and friends used to live here.
 
-function normalizeEmbeddingDimensions(rawEmbedding: unknown): number[] {
-  if (!Array.isArray(rawEmbedding)) {
-    throw new Error('Embeddings API returned an invalid embedding payload.');
-  }
-
-  const embedding = rawEmbedding.filter(
-    (value): value is number => typeof value === 'number' && Number.isFinite(value),
-  );
-
-  if (!embedding.length) {
-    throw new Error('Embeddings API returned an empty embedding vector.');
-  }
-
-  if (embedding.length === EMBEDDING_DIMENSIONS) return embedding;
-  if (embedding.length > EMBEDDING_DIMENSIONS) return embedding.slice(0, EMBEDDING_DIMENSIONS);
-  return [...embedding, ...new Array(EMBEDDING_DIMENSIONS - embedding.length).fill(0)];
-}
-
-export async function embedText(text: string): Promise<number[]> {
-  if (!process.env.LLM_API_ENDPOINT || !EMBEDDING_API_KEY) {
-    throw new Error('Embedding service is not configured.');
-  }
-
-  const res = await fetch(EMBEDDING_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${EMBEDDING_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: EMBEDDING_MODEL,
-      input: text.trim(),
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Embeddings API error: ${errText}`);
-  }
-
-  const data = await res.json();
-  return normalizeEmbeddingDimensions(data?.data?.[0]?.embedding);
-}
-
-// Per-stage cache for "does this stage have any cracked prompts yet?". Lets the
-// chat path skip the embedding API call + similarity RPC entirely while a
-// stage has zero cracks (the common case for early sessions). Once a stage
-// flips to true we keep that forever (cracked rows never get deleted within
-// a day). False values get a short TTL so a fresh crack becomes effective
+// Cache of "does this stage have any cracked prompts yet?". Lets the chat
+// path skip the DB lookup entirely while a stage has zero cracks (the
+// common case for early sessions). Once flipped to true we keep that
+// forever; false values get a short TTL so a fresh crack becomes effective
 // within ~10s without hammering the DB.
 const NEGATIVE_TTL_MS = 10_000;
 const stageHasCrackedCache = new Map<number, { hasCracks: boolean; expiresAt: number }>();
@@ -82,10 +42,11 @@ export async function stageHasCrackedPrompts(stageNumber: number): Promise<boole
     .from('cracked_prompts')
     .select('id', { count: 'exact', head: true })
     .eq('stage_number', stageNumber)
+    .not('text_hash', 'is', null)
     .limit(1);
 
   if (error) {
-    // Fail open — assume cracks exist so similarity check still runs.
+    // Fail open — assume cracks exist so the hash check still runs.
     console.warn('[stageHasCrackedPrompts] count error, failing open:', error.message);
     return true;
   }
@@ -98,33 +59,30 @@ export async function stageHasCrackedPrompts(stageNumber: number): Promise<boole
   return hasCracks;
 }
 
-export async function isPromptTooSimilar(stageNumber: number, embedding: number[]): Promise<{
-  blocked: boolean;
-  message?: string;
-}> {
-  const { data, error } = await supabase.rpc('check_prompt_similarity', {
-    p_stage_number: stageNumber,
-    p_embedding: JSON.stringify(embedding),
-    p_threshold: SIMILARITY_THRESHOLD,
-  });
+export async function isPromptCopyPaste(
+  stageNumber: number,
+  userMessage: string,
+): Promise<{ blocked: boolean; message?: string }> {
+  const hash = hashPrompt(userMessage);
+  if (!hash) return { blocked: false };
+
+  const { data, error } = await supabase
+    .from('cracked_prompts')
+    .select('id')
+    .eq('stage_number', stageNumber)
+    .eq('text_hash', hash)
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
-    console.warn('[isPromptTooSimilar] RPC error, failing open:', error.message);
+    console.warn('[isPromptCopyPaste] lookup error, failing open:', error.message);
     return { blocked: false };
   }
 
-  // `check_prompt_similarity` is defined as RETURNS TABLE, so supabase-js
-  // resolves `data` to an array of rows (one row in our case). The earlier
-  // implementation read `data?.is_similar` directly off the array, which is
-  // always undefined — anti-cheat was silently disabled. Coerce here so we
-  // also tolerate a future schema change to RETURNS jsonb / RETURNS record.
-  const hit = Array.isArray(data) ? data[0] : data;
-
-  if (hit?.is_similar) {
-    const pct = Math.round((hit.similarity ?? SIMILARITY_THRESHOLD) * 100);
+  if (data) {
     return {
       blocked: true,
-      message: `Compliance caught that exploit! (${pct}% match with a known crack). Be more original.`,
+      message: 'Compliance caught that exploit! That prompt has already been used to crack this stage. Please come up with your own.',
     };
   }
 

@@ -92,8 +92,8 @@ export default async function SystemPage() {
           <ul className="ml-5 list-disc space-y-1 text-slate-400">
             <li>Deletes every row in <code>players</code> (cascades to completions and prompt logs).</li>
             <li>
-              Anonymises <code>cracked_prompts</code> by setting <code>player_id = NULL</code> so
-              the cross-day anti-cheat embeddings survive.
+              Deletes every row in <code>cracked_prompts</code> so the next
+              booth session starts with a fresh anti-cheat hash list.
             </li>
             <li>Existing player JWT cookies will resolve to 401 PLAYER_GONE on next request.</li>
             <li>Cannot be undone. Run only at end-of-day or between booth sessions.</li>
