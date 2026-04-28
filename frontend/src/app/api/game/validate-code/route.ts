@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     // sub-floor times indicate prompt copying from another account.
     // Clamping (vs. rejecting) is non-disruptive: cheaters still complete the
     // stage but lose the inflated time-bonus and the "ridiculous" leaderboard time.
-    const MIN_TIME_FLOOR_SECONDS = 20;
+    const MIN_TIME_FLOOR_SECONDS = 40;
     const timeTakenSeconds = Math.max(rawTimeTakenSeconds, MIN_TIME_FLOOR_SECONDS);
     if (rawTimeTakenSeconds < MIN_TIME_FLOOR_SECONDS) {
       console.warn(
