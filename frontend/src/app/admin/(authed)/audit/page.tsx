@@ -52,8 +52,8 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Audit Log</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold sm:text-2xl">Audit Log</h1>
         <span className="text-sm text-slate-400">{total.toLocaleString()} entries</span>
       </div>
 
@@ -64,7 +64,7 @@ export default function AuditPage() {
           setOffset(0);
         }}
         placeholder="Filter by action (e.g. ban_player, update_stage)…"
-        className="w-96 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+        className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm sm:w-96"
       />
 
       {error && (
@@ -73,8 +73,8 @@ export default function AuditPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-slate-800">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <table className="w-full min-w-[920px] text-sm">
           <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">When</th>
@@ -140,7 +140,7 @@ export default function AuditPage() {
         </table>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
         <span>
           Showing {entries.length === 0 ? 0 : offset + 1}–{offset + entries.length} of{' '}
           {total}

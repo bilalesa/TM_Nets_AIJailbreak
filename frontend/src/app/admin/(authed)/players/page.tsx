@@ -57,8 +57,8 @@ export default function PlayersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Players</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold sm:text-2xl">Players</h1>
         <span className="text-sm text-slate-400">{total.toLocaleString()} total</span>
       </div>
 
@@ -70,7 +70,7 @@ export default function PlayersPage() {
             setOffset(0);
           }}
           placeholder="Search username or email…"
-          className="w-72 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-slate-500"
+          className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-slate-500 sm:w-72"
         />
         <div className="flex rounded-md border border-slate-700 bg-slate-900 p-0.5 text-sm">
           {(['all', 'active', 'banned'] as Filter[]).map((f) => (
@@ -98,8 +98,8 @@ export default function PlayersPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-slate-800">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <table className="w-full min-w-[820px] text-sm">
           <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">Username</th>

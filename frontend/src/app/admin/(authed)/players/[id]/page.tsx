@@ -134,14 +134,14 @@ export default function PlayerDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/admin/players"
           className="text-sm text-slate-400 hover:text-slate-200"
         >
           ← Back
         </Link>
-        <h1 className="text-2xl font-semibold">{player.username}</h1>
+        <h1 className="break-all text-xl font-semibold sm:text-2xl">{player.username}</h1>
         {player.is_banned ? (
           <span className="rounded bg-red-950/60 px-2 py-0.5 text-xs text-red-300">
             Banned
@@ -185,7 +185,7 @@ export default function PlayerDetailPage({
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-6">
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">
           Moderation
         </h2>
@@ -203,7 +203,7 @@ export default function PlayerDetailPage({
               value={banReason}
               onChange={(e) => setBanReason(e.target.value)}
               placeholder="Reason (required)"
-              className="w-72 rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm sm:w-72"
             />
             <button
               onClick={ban}
@@ -223,47 +223,49 @@ export default function PlayerDetailPage({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-6">
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">
           Stage completions ({completions.length})
         </h2>
         {completions.length === 0 ? (
           <div className="text-sm text-slate-500">No completions yet.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="py-2">Stage</th>
-                <th className="py-2 text-right">Score</th>
-                <th className="py-2 text-right">Time (s)</th>
-                <th className="py-2">Started</th>
-                <th className="py-2">Submitted</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {completions.map((c) => (
-                <tr key={c.stage_number}>
-                  <td className="py-2 font-mono">#{c.stage_number}</td>
-                  <td className="py-2 text-right font-mono">{c.score_awarded}</td>
-                  <td className="py-2 text-right font-mono">{c.time_taken_seconds}</td>
-                  <td className="py-2 text-slate-400">
-                    {c.started_at ? new Date(c.started_at).toLocaleString() : '—'}
-                  </td>
-                  <td className="py-2 text-slate-400">
-                    {c.submitted_at
-                      ? new Date(c.submitted_at).toLocaleString()
-                      : c.completed_at
-                      ? new Date(c.completed_at).toLocaleString()
-                      : '—'}
-                  </td>
+          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-2">Stage</th>
+                  <th className="py-2 text-right">Score</th>
+                  <th className="py-2 text-right">Time (s)</th>
+                  <th className="py-2">Started</th>
+                  <th className="py-2">Submitted</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {completions.map((c) => (
+                  <tr key={c.stage_number}>
+                    <td className="py-2 font-mono">#{c.stage_number}</td>
+                    <td className="py-2 text-right font-mono">{c.score_awarded}</td>
+                    <td className="py-2 text-right font-mono">{c.time_taken_seconds}</td>
+                    <td className="py-2 text-slate-400">
+                      {c.started_at ? new Date(c.started_at).toLocaleString() : '—'}
+                    </td>
+                    <td className="py-2 text-slate-400">
+                      {c.submitted_at
+                        ? new Date(c.submitted_at).toLocaleString()
+                        : c.completed_at
+                        ? new Date(c.completed_at).toLocaleString()
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-6">
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">
           Recent prompts ({prompts.length})
         </h2>
@@ -276,7 +278,7 @@ export default function PlayerDetailPage({
                 key={p.id}
                 className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-sm"
               >
-                <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                   <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono">
                     Stage {p.stage_number}
                   </span>
@@ -292,9 +294,11 @@ export default function PlayerDetailPage({
                     </span>
                   )}
                 </div>
-                <div className="whitespace-pre-wrap text-slate-200">{p.prompt_text}</div>
+                <div className="whitespace-pre-wrap break-words text-slate-200">
+                  {p.prompt_text}
+                </div>
                 {p.ai_response && (
-                  <div className="mt-2 whitespace-pre-wrap border-t border-slate-800 pt-2 text-slate-400">
+                  <div className="mt-2 whitespace-pre-wrap break-words border-t border-slate-800 pt-2 text-slate-400">
                     {p.ai_response}
                   </div>
                 )}
