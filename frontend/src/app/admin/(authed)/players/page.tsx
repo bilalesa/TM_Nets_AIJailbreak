@@ -6,11 +6,9 @@ import Link from 'next/link';
 interface Player {
   id: string;
   username: string;
-  email: string | null;
   total_score: number;
   is_banned: boolean;
   banned_reason: string | null;
-  is_verified: boolean;
   created_at: string;
   registration_ip: string | null;
 }
@@ -69,7 +67,7 @@ export default function PlayersPage() {
             setSearch(e.target.value);
             setOffset(0);
           }}
-          placeholder="Search username or email…"
+          placeholder="Search username…"
           className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-slate-500 sm:w-72"
         />
         <div className="flex rounded-md border border-slate-700 bg-slate-900 p-0.5 text-sm">
@@ -103,7 +101,6 @@ export default function PlayersPage() {
           <thead className="sticky top-0 z-10 bg-slate-900/95 text-left text-xs uppercase tracking-wide text-slate-400 backdrop-blur">
             <tr>
               <th className="px-4 py-3">Username</th>
-              <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3 text-right">Score</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Joined</th>
@@ -114,14 +111,14 @@ export default function PlayersPage() {
           <tbody className="divide-y divide-slate-800 bg-slate-950">
             {loading && players.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && players.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   No players found.
                 </td>
               </tr>
@@ -129,29 +126,17 @@ export default function PlayersPage() {
             {players.map((p) => (
               <tr key={p.id} className="hover:bg-slate-900/40">
                 <td className="px-4 py-3 font-medium text-slate-100">{p.username}</td>
-                <td className="px-4 py-3 text-slate-300">{p.email ?? '—'}</td>
                 <td className="px-4 py-3 text-right font-mono">{p.total_score}</td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-1">
-                    {p.is_banned ? (
-                      <span className="rounded bg-red-950/60 px-2 py-0.5 text-xs text-red-300">
-                        Banned
-                      </span>
-                    ) : (
-                      <span className="rounded bg-emerald-950/60 px-2 py-0.5 text-xs text-emerald-300">
-                        Active
-                      </span>
-                    )}
-                    {p.is_verified ? (
-                      <span className="rounded bg-sky-950/60 px-2 py-0.5 text-xs text-sky-300">
-                        Verified
-                      </span>
-                    ) : (
-                      <span className="rounded bg-amber-950/60 px-2 py-0.5 text-xs text-amber-300">
-                        Unverified
-                      </span>
-                    )}
-                  </div>
+                  {p.is_banned ? (
+                    <span className="rounded bg-red-950/60 px-2 py-0.5 text-xs text-red-300">
+                      Banned
+                    </span>
+                  ) : (
+                    <span className="rounded bg-emerald-950/60 px-2 py-0.5 text-xs text-emerald-300">
+                      Active
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-slate-400">
                   {new Date(p.created_at).toLocaleDateString()}

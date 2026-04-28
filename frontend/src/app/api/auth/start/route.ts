@@ -1,6 +1,8 @@
 // frontend/src/app/api/auth/start/route.ts
-// Forwards { username, email } to the Express backend, which immediately
-// issues a JWT. The token is stored as an http-only cookie.
+// Forwards { username } to the Express backend, which immediately issues a
+// JWT and a one-time recoveryCode. The token is stored as an http-only
+// cookie; the recoveryCode is returned to the client to display ONCE so
+// the player can save it.
 
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -32,17 +34,13 @@ async function broadcastPlayerJoined(username: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { username, email, fingerprint } = body as {
+    const { username, fingerprint } = body as {
       username?: unknown;
-      email?: unknown;
       fingerprint?: unknown;
     };
 
     if (!username || typeof username !== 'string' || !username.trim()) {
       return NextResponse.json({ error: 'Username is required' }, { status: 400 });
-    }
-    if (!email || typeof email !== 'string' || !email.trim()) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
     const backendUrl = getBackendBaseUrl();
@@ -62,7 +60,6 @@ export async function POST(request: Request) {
       headers: forwardHeaders,
       body: JSON.stringify({
         username: username.trim(),
-        email: email.trim().toLowerCase(),
         fingerprint:
           typeof fingerprint === 'string' ? fingerprint.trim().slice(0, 256) : undefined,
       }),
@@ -92,7 +89,13 @@ export async function POST(request: Request) {
       .then(() => {})
       .catch((err: unknown) => console.warn('[broadcast player_joined]', err));
 
-    return NextResponse.json({ success: true, username: data.username });
+    // recoveryCode is forwarded to the client so the signup page can
+    // display it once. It is never persisted on the frontend session.
+    return NextResponse.json({
+      success: true,
+      username: data.username,
+      recoveryCode: data.recoveryCode,
+    });
   } catch (error) {
     console.error('[/api/auth/start]', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

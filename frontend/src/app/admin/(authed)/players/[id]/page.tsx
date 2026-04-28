@@ -7,11 +7,9 @@ import Link from 'next/link';
 interface Player {
   id: string;
   username: string;
-  email: string | null;
   total_score: number;
   is_banned: boolean;
   banned_reason: string | null;
-  is_verified: boolean;
   created_at: string;
   registration_ip: string | null;
   client_fingerprint: string | null;
@@ -151,20 +149,10 @@ export default function PlayerDetailPage({
             Active
           </span>
         )}
-        {player.is_verified ? (
-          <span className="rounded bg-sky-950/60 px-2 py-0.5 text-xs text-sky-300">
-            Email verified
-          </span>
-        ) : (
-          <span className="rounded bg-amber-950/60 px-2 py-0.5 text-xs text-amber-300">
-            Email unverified
-          </span>
-        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Detail label="ID" value={<code className="text-xs">{player.id}</code>} />
-        <Detail label="Email" value={player.email ?? '—'} />
         <Detail label="Score" value={player.total_score.toString()} />
         <Detail label="Joined" value={new Date(player.created_at).toLocaleString()} />
         <Detail label="Registration IP" value={player.registration_ip ?? '—'} />
@@ -179,7 +167,6 @@ export default function PlayerDetailPage({
           }
         />
         <Detail label="Session active" value={player.session_active ? 'Yes' : 'No'} />
-        <Detail label="Verified" value={player.is_verified ? 'Yes' : 'No'} />
         {player.is_banned && (
           <Detail label="Ban reason" value={player.banned_reason ?? '—'} />
         )}

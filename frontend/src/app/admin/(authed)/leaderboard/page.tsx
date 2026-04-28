@@ -7,7 +7,6 @@ import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 interface Entry {
   id: string;
   username: string;
-  email: string | null;
   totalScore: number;
   stagesPassed: number;
   totalSeconds: number;
@@ -93,7 +92,6 @@ export default function AdminLeaderboardPage() {
             <tr>
               <th className="px-4 py-3 w-16">Rank</th>
               <th className="px-4 py-3">Username</th>
-              <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3 text-right">Score</th>
               <th className="px-4 py-3 text-right">Stages</th>
               <th className="px-4 py-3 text-right">Total Time</th>
@@ -104,14 +102,14 @@ export default function AdminLeaderboardPage() {
           <tbody className="divide-y divide-slate-800 bg-slate-950">
             {loading && rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No players yet.
                 </td>
               </tr>
@@ -131,7 +129,6 @@ export default function AdminLeaderboardPage() {
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-slate-300">{r.email ?? '—'}</td>
                 <td className="px-4 py-3 text-right font-mono">
                   {r.totalScore.toLocaleString()}
                 </td>

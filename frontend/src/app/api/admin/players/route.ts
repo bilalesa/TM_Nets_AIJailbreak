@@ -17,14 +17,14 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('players')
       .select(
-        'id, username, email, total_score, is_banned, banned_reason, is_verified, created_at, registration_ip, client_fingerprint',
+        'id, username, total_score, is_banned, banned_reason, created_at, registration_ip, client_fingerprint',
         { count: 'exact' },
       )
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (search) {
-      query = query.or(`username.ilike.%${search}%,email.ilike.%${search}%`);
+      query = query.ilike('username', `%${search}%`);
     }
     if (filter === 'banned') query = query.eq('is_banned', true);
     if (filter === 'active') query = query.eq('is_banned', false);

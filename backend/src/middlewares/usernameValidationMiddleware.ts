@@ -5,9 +5,6 @@ const USERNAME_PATTERN = /^[a-zA-Z0-9_\-. ]+$/;
 const MIN_LENGTH = 2;
 const MAX_LENGTH = 30;
 
-// RFC 5322-lite. Basic format check only — emails are not verified.
-const EMAIL_PATTERN = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-
 export function validateUsernameInput(req: Request, res: Response, next: NextFunction) {
   const { username } = req.body as { username?: unknown };
 
@@ -38,30 +35,5 @@ export function validateUsernameInput(req: Request, res: Response, next: NextFun
   }
 
   req.body.username = trimmedUsername;
-  next();
-}
-
-export function validateEmailInput(req: Request, res: Response, next: NextFunction) {
-  const { email } = req.body as { email?: unknown };
-
-  if (typeof email !== 'string') {
-    return res.status(400).json({ error: 'Email is required' });
-  }
-
-  const normalized = email.trim().toLowerCase();
-
-  if (!normalized) {
-    return res.status(400).json({ error: 'Email is required' });
-  }
-
-  if (normalized.length > 254) {
-    return res.status(400).json({ error: 'Email is too long' });
-  }
-
-  if (!EMAIL_PATTERN.test(normalized)) {
-    return res.status(400).json({ error: 'Email format is invalid' });
-  }
-
-  req.body.email = normalized;
   next();
 }

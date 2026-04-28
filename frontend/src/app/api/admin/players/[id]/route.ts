@@ -24,7 +24,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         supabase
           .from('players')
           .select(
-            'id, username, email, total_score, is_banned, banned_reason, is_verified, created_at, registration_ip, client_fingerprint, session_active',
+            'id, username, total_score, is_banned, banned_reason, created_at, registration_ip, client_fingerprint, session_active',
           )
           .eq('id', id)
           .maybeSingle(),

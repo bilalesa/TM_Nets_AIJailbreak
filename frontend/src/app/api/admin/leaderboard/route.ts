@@ -1,4 +1,4 @@
-// Admin leaderboard: full ranking with email + signup metadata.
+// Admin leaderboard: full ranking with signup metadata.
 // Includes banned players (so admins can audit) and ties broken by total time.
 
 import { NextResponse } from 'next/server';
@@ -20,7 +20,7 @@ export async function GET() {
 
     const { data: players, error: playersError } = await supabase
       .from('players')
-      .select('id, username, email, total_score, is_banned, created_at')
+      .select('id, username, total_score, is_banned, created_at')
       .order('total_score', { ascending: false });
 
     if (playersError) throw playersError;
@@ -62,7 +62,6 @@ export async function GET() {
         return {
           id: p.id,
           username: p.username,
-          email: p.email,
           totalScore: p.total_score,
           isBanned: p.is_banned,
           createdAt: p.created_at,
