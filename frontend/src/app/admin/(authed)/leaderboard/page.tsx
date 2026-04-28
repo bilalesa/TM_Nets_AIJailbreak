@@ -68,8 +68,8 @@ export default function AdminLeaderboardPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Leaderboard</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold sm:text-2xl">Leaderboard</h1>
         <div className="flex items-center gap-4 text-sm text-slate-400">
           <span>{total.toLocaleString()} players</span>
           <button
@@ -87,8 +87,8 @@ export default function AdminLeaderboardPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-slate-800">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <table className="w-full min-w-[880px] text-sm">
           <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3 w-16">Rank</th>

@@ -85,11 +85,11 @@ export default function StageEditPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/admin/stages" className="text-sm text-slate-400 hover:text-slate-200">
           ← Back
         </Link>
-        <h1 className="text-2xl font-semibold">Stage {stage.stage_number}</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Stage {stage.stage_number}</h1>
       </div>
 
       {error && (

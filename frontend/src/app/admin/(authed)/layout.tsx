@@ -28,13 +28,17 @@ export default async function AuthedAdminLayout({
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-8">
-            <Link href="/admin" className="text-lg font-semibold tracking-tight">
+      <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-8">
+            <Link
+              href="/admin"
+              className="shrink-0 text-base font-semibold tracking-tight sm:text-lg"
+            >
               Admin Console
             </Link>
-            <nav className="flex items-center gap-1 text-sm">
+            {/* Nav scrolls horizontally on mobile so links never wrap or get cut off */}
+            <nav className="-mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <NavLink href="/admin">Dashboard</NavLink>
               <NavLink href="/admin/players">Players</NavLink>
               <NavLink href="/admin/leaderboard">Leaderboard</NavLink>
@@ -42,14 +46,14 @@ export default async function AuthedAdminLayout({
               <NavLink href="/admin/audit">Audit Log</NavLink>
             </nav>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-400">
-              {admin.email}
-              <span className="ml-2 rounded bg-slate-800 px-2 py-0.5 text-xs uppercase tracking-wide text-slate-300">
+          <div className="flex w-full items-center justify-between gap-3 text-sm sm:w-auto sm:justify-end">
+            <span className="min-w-0 truncate text-slate-400">
+              <span className="truncate align-middle">{admin.email}</span>
+              <span className="ml-2 rounded bg-slate-800 px-2 py-0.5 align-middle text-xs uppercase tracking-wide text-slate-300">
                 {admin.role}
               </span>
             </span>
-            <form action="/api/admin/logout" method="post">
+            <form action="/api/admin/logout" method="post" className="shrink-0">
               <button
                 type="submit"
                 className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium hover:bg-slate-800"
@@ -60,7 +64,7 @@ export default async function AuthedAdminLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }

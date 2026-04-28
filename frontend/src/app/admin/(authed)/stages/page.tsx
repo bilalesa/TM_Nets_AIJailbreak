@@ -35,7 +35,7 @@ export default function StagesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Stages</h1>
+      <h1 className="text-xl font-semibold sm:text-2xl">Stages</h1>
 
       {error && (
         <div className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
