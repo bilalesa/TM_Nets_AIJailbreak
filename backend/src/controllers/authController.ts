@@ -41,7 +41,52 @@ export const startSession = async (req: Request, res: Response) => {
     );
     const registrationIp = extractClientIp(req);
 
-    // Username must be free.
+    // Look up by email first. Re-login is allowed when both username AND
+    // email match an existing record (e.g. cookie expired, switched device,
+    // cleared browser storage). New username+email pairs create new accounts.
+    const { data: existingByEmail, error: emailLookupError } = await supabase
+      .from('players')
+      .select('id, username, is_banned, banned_reason')
+      .eq('email', email)
+      .maybeSingle();
+    if (emailLookupError) throw emailLookupError;
+
+    if (existingByEmail) {
+      // Email exists — must match the same username, otherwise reject.
+      if (existingByEmail.username !== username) {
+        return res.status(409).json({
+          error:
+            'An account already exists for this email under a different username.',
+        });
+      }
+      if (existingByEmail.is_banned) {
+        return res.status(403).json({
+          error:
+            existingByEmail.banned_reason ?? 'This account has been banned.',
+        });
+      }
+
+      // Re-login: refresh session flag + fingerprint, leave registration_ip
+      // intact as the original signup IP for audit.
+      const { error: refreshError } = await supabase
+        .from('players')
+        .update({
+          session_active: true,
+          last_active_at: new Date().toISOString(),
+          client_fingerprint: fingerprint,
+        })
+        .eq('id', existingByEmail.id);
+      if (refreshError) throw refreshError;
+
+      const token = jwt.sign(
+        { id: existingByEmail.id, username: existingByEmail.username },
+        jwtSecret,
+        { expiresIn: '24h' },
+      );
+      return res.json({ token, username: existingByEmail.username });
+    }
+
+    // Brand-new account — username must be free.
     const { data: usernameTaken, error: usernameError } = await supabase
       .from('players')
       .select('id')
@@ -52,19 +97,6 @@ export const startSession = async (req: Request, res: Response) => {
       return res.status(409).json({
         error: 'That username is already taken. Please choose a different name.',
       });
-    }
-
-    // Email must be free.
-    const { data: emailTaken, error: emailLookupError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-    if (emailLookupError) throw emailLookupError;
-    if (emailTaken) {
-      return res
-        .status(409)
-        .json({ error: 'An account already exists for this email.' });
     }
 
     const { data: inserted, error: insertError } = await supabase
