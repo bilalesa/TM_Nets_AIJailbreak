@@ -87,9 +87,9 @@ export default function AdminLeaderboardPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-800">
+      <div className="max-h-[calc(100vh-12rem)] overflow-auto rounded-xl border border-slate-800">
         <table className="w-full min-w-[880px] text-sm">
-          <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
+          <thead className="sticky top-0 z-10 bg-slate-900/95 text-left text-xs uppercase tracking-wide text-slate-400 backdrop-blur">
             <tr>
               <th className="px-4 py-3 w-16">Rank</th>
               <th className="px-4 py-3">Username</th>
