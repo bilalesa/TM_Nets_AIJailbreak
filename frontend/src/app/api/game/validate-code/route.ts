@@ -104,6 +104,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ correct: false });
     }
 
+    // 4b. Audit signal: snapshot the player's current fingerprint so we can
+    // freeze it onto the completion row at insert time (step 7). We do NOT
+    // block on cross-account fingerprint matches — iOS Safari normalizes
+    // fingerprints heavily across identical device models, so a runtime
+    // block would generate too many false positives at booth events. The
+    // snapshot is purely for admin visibility / forensic review.
+    const { data: requestingPlayer, error: requestingPlayerError } = await supabase
+      .from('players')
+      .select('client_fingerprint')
+      .eq('id', player.id)
+      .maybeSingle();
+    if (requestingPlayerError) throw requestingPlayerError;
+
+    const requestingFingerprint = requestingPlayer?.client_fingerprint ?? null;
+
     // 5. Derive started_at from MIN(prompt_logs.created_at) for this player+stage.
     //    submitted_at is "now". time_taken_seconds is computed server-side so the
     //    client cannot influence the score via a forged elapsedSeconds.
@@ -143,7 +158,9 @@ export async function POST(request: NextRequest) {
     const grossScore = stageConfig.baseXP + timeBonus;
     const scoreAwarded = grossScore;
 
-    // 7. Record completion
+    // 7. Record completion. client_fingerprint is snapshotted at win time so
+    // admins can spot multi-account abuse during forensic review (e.g. five
+    // wins on five accounts all sharing one fingerprint within minutes).
     const { error: completionError } = await supabase
       .from('stage_completions')
       .insert({
@@ -153,6 +170,7 @@ export async function POST(request: NextRequest) {
         time_taken_seconds: timeTakenSeconds,
         started_at: startedAt.toISOString(),
         submitted_at: submittedAt.toISOString(),
+        client_fingerprint: requestingFingerprint,
       });
 
     if (completionError) throw completionError;

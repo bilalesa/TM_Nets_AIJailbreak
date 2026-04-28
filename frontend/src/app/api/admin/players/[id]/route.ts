@@ -30,7 +30,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           .maybeSingle(),
         supabase
           .from('stage_completions')
-          .select('stage_number, score_awarded, time_taken_seconds, started_at, submitted_at, completed_at')
+          .select(
+            'stage_number, score_awarded, time_taken_seconds, started_at, submitted_at, completed_at, client_fingerprint',
+          )
           .eq('player_id', id)
           .order('stage_number', { ascending: true }),
         supabase

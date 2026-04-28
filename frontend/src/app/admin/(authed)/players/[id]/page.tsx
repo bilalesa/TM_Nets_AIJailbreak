@@ -23,6 +23,7 @@ interface Completion {
   started_at: string | null;
   submitted_at: string | null;
   completed_at: string | null;
+  client_fingerprint: string | null;
 }
 
 interface PromptLog {
@@ -218,7 +219,7 @@ export default function PlayerDetailPage({
           <div className="text-sm text-slate-500">No completions yet.</div>
         ) : (
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="text-left text-xs uppercase text-slate-500">
                 <tr>
                   <th className="py-2">Stage</th>
@@ -226,26 +227,46 @@ export default function PlayerDetailPage({
                   <th className="py-2 text-right">Time (s)</th>
                   <th className="py-2">Started</th>
                   <th className="py-2">Submitted</th>
+                  <th className="py-2">Fingerprint</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {completions.map((c) => (
-                  <tr key={c.stage_number}>
-                    <td className="py-2 font-mono">#{c.stage_number}</td>
-                    <td className="py-2 text-right font-mono">{c.score_awarded}</td>
-                    <td className="py-2 text-right font-mono">{c.time_taken_seconds}</td>
-                    <td className="py-2 text-slate-400">
-                      {c.started_at ? new Date(c.started_at).toLocaleString() : '—'}
-                    </td>
-                    <td className="py-2 text-slate-400">
-                      {c.submitted_at
-                        ? new Date(c.submitted_at).toLocaleString()
-                        : c.completed_at
-                        ? new Date(c.completed_at).toLocaleString()
-                        : '—'}
-                    </td>
-                  </tr>
-                ))}
+                {completions.map((c) => {
+                  const fpMatchesPlayer =
+                    c.client_fingerprint != null &&
+                    c.client_fingerprint === player.client_fingerprint;
+                  return (
+                    <tr key={c.stage_number}>
+                      <td className="py-2 font-mono">#{c.stage_number}</td>
+                      <td className="py-2 text-right font-mono">{c.score_awarded}</td>
+                      <td className="py-2 text-right font-mono">{c.time_taken_seconds}</td>
+                      <td className="py-2 text-slate-400">
+                        {c.started_at ? new Date(c.started_at).toLocaleString() : '—'}
+                      </td>
+                      <td className="py-2 text-slate-400">
+                        {c.submitted_at
+                          ? new Date(c.submitted_at).toLocaleString()
+                          : c.completed_at
+                          ? new Date(c.completed_at).toLocaleString()
+                          : '—'}
+                      </td>
+                      <td className="py-2 font-mono text-xs text-slate-400">
+                        {c.client_fingerprint ? (
+                          <span
+                            title={c.client_fingerprint}
+                            className={
+                              fpMatchesPlayer ? 'text-slate-400' : 'text-amber-300'
+                            }
+                          >
+                            {c.client_fingerprint.slice(0, 12)}…
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
