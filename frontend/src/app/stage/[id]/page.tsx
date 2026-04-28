@@ -115,8 +115,14 @@ export default function StagePage() {
   const codeExtracted = messages.some((m) => m.role === 'bot' && m.content.includes('🔑 System bypassed'));
 
   // ── Stopwatch ─────────────────────────────────────────────────────────────
-  const { elapsed, formatted, running, start: startTimer, stop: stopTimer } =
-    useStopwatch(false, `stage-${stageId}-timer`);
+  const {
+    elapsed,
+    formatted,
+    running,
+    start: startTimer,
+    stop: stopTimer,
+    resume: resumeTimer,
+  } = useStopwatch(false, `stage-${stageId}-timer`);
   // Redirect invalid stage ids after hooks are initialized.
   useEffect(() => {
     if (invalidStage) {
@@ -227,6 +233,12 @@ export default function StagePage() {
             ...data.messages,
           ]);
           // The player already has prompts logged → timer is server-running.
+          // Resume the displayed stopwatch from the first prompt's timestamp
+          // so the UI matches the server-authoritative started_at (which is
+          // MIN(prompt_logs.created_at) — see validate-code/route.ts). Without
+          // this the displayed timer would either freeze at 0 (previous bug)
+          // or start ticking from 0 and lie low about real elapsed time.
+          resumeTimer(data.messages[0].timestamp);
           setTimerStarted(true);
           return;
         }
@@ -248,7 +260,7 @@ export default function StagePage() {
     return () => {
       cancelled = true;
     };
-  }, [stageId, stageConfig]);
+  }, [stageId, stageConfig, resumeTimer]);
 
   // Persist messages across reloads
   useEffect(() => {

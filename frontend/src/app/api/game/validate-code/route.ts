@@ -124,23 +124,10 @@ export async function POST(request: NextRequest) {
     if (firstPromptError) throw firstPromptError;
 
     const startedAt = firstPrompt?.created_at ? new Date(firstPrompt.created_at) : submittedAt;
-    const rawTimeTakenSeconds = Math.max(
+    const timeTakenSeconds = Math.max(
       0,
       Math.floor((submittedAt.getTime() - startedAt.getTime()) / 1000),
     );
-
-    // Anti-cheat: clamp to a minimum-time floor before storing or scoring.
-    // Legitimate solves on any stage take well over MIN_TIME_FLOOR_SECONDS;
-    // sub-floor times indicate prompt copying from another account.
-    // Clamping (vs. rejecting) is non-disruptive: cheaters still complete the
-    // stage but lose the inflated time-bonus and the "ridiculous" leaderboard time.
-    const MIN_TIME_FLOOR_SECONDS = 40;
-    const timeTakenSeconds = Math.max(rawTimeTakenSeconds, MIN_TIME_FLOOR_SECONDS);
-    if (rawTimeTakenSeconds < MIN_TIME_FLOOR_SECONDS) {
-      console.warn(
-        `[validate-code] sub-floor time clamped: player=${player.id} stage=${parsedStageNumber} raw=${rawTimeTakenSeconds}s -> ${MIN_TIME_FLOOR_SECONDS}s`,
-      );
-    }
 
     // 6. Compute score: baseXP + time bonus
     const timeBonus = computeTimeBonus(timeTakenSeconds, stageConfig.baseXP);

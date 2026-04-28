@@ -89,6 +89,22 @@ export function useStopwatch(autoStart = false, persistKey?: string) {
     startTimeRef.current = null;
   }, []);
 
+  // Resume the stopwatch from a known wall-clock start time. Used when we
+  // rehydrate a session after a recovery-code re-login on a fresh tab: the
+  // server-authoritative timer has been running since the player's first
+  // prompt, so the displayed timer must match that elapsed — not restart
+  // from zero. Callers pass the timestamp (ms) of the first prompt; we
+  // seed `accumulated` with the gap between then and now, then start ticking.
+  const resume = useCallback((startTimestampMs: number) => {
+    const elapsedSinceStart = Math.max(
+      0,
+      Math.floor((Date.now() - startTimestampMs) / 1000),
+    );
+    accumulatedRef.current = elapsedSinceStart;
+    setElapsed(elapsedSinceStart);
+    setRunning(true);
+  }, []);
+
   // Format as HH:MM:SS
   const formatted = [
     String(Math.floor(elapsed / 3600)).padStart(2, '0'),
@@ -96,5 +112,5 @@ export function useStopwatch(autoStart = false, persistKey?: string) {
     String(elapsed % 60).padStart(2, '0'),
   ].join(' : ');
 
-  return { elapsed, formatted, running, start, stop, reset };
+  return { elapsed, formatted, running, start, stop, reset, resume };
 }
