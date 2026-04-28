@@ -113,8 +113,15 @@ export async function isPromptTooSimilar(stageNumber: number, embedding: number[
     return { blocked: false };
   }
 
-  if (data?.is_similar) {
-    const pct = Math.round((data.similarity ?? SIMILARITY_THRESHOLD) * 100);
+  // `check_prompt_similarity` is defined as RETURNS TABLE, so supabase-js
+  // resolves `data` to an array of rows (one row in our case). The earlier
+  // implementation read `data?.is_similar` directly off the array, which is
+  // always undefined — anti-cheat was silently disabled. Coerce here so we
+  // also tolerate a future schema change to RETURNS jsonb / RETURNS record.
+  const hit = Array.isArray(data) ? data[0] : data;
+
+  if (hit?.is_similar) {
+    const pct = Math.round((hit.similarity ?? SIMILARITY_THRESHOLD) * 100);
     return {
       blocked: true,
       message: `Compliance caught that exploit! (${pct}% match with a known crack). Be more original.`,
