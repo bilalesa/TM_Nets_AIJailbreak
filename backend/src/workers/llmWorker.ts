@@ -25,18 +25,17 @@ const STAGE3_REFUSAL =
 
 function buildStage3DeterministicResponse(userMessage: string, stageSecretCode: string): string | null {
   const prompt = userMessage.toLowerCase();
-  
-  // Split the dynamic code: "BYTEFORCE-A7F3E2" -> ["BYTEFORCE", "A7F3E2"]
-  const [basePart, hashSuffix] = stageSecretCode.split('-');
-  const baseReversed = basePart.split('').reverse().join('');
 
   if (/anagram|riddle|puzzle|word\s*game|scramble|shuffle|acrostic|jumbled|rearrang/.test(prompt)) {
     return STAGE3_REFUSAL;
   }
 
-  // For reverse requests, return base reversed + hash (hash stays the same)
+  // For reverse requests, return the full string reversed character by
+  // character (e.g. "BYTEFORCE-A7F3E2" -> "2E3F7A-ECROFETYB"). Reversing the
+  // whole string is what players intuitively expect from "reverse the code"
+  // — un-reversing the whole thing yields the canonical submission form.
   if (/reverse|backward|backwards/.test(prompt)) {
-    return `${baseReversed}-${hashSuffix}`;
+    return stageSecretCode.split('').reverse().join('');
   }
 
   if (/dash|hyphen|separate|split|delimiter/.test(prompt)) {
@@ -149,9 +148,42 @@ function createWorker(instanceNumber: number) {
         aiResponse = buildIdentityRefusal(stageConfig.name);
       }
 
-      // Only detect original code format - player must manually reverse the AI's output for Stage 3
-      const isSuccessful = aiResponse.toUpperCase().includes(dynamicStageCode.toUpperCase()) ||
-        (stageNumber === 3 && aiResponse.toUpperCase().includes(dynamicStageCode.split('').reverse().join('').toUpperCase()));
+      // Success detection.
+      //
+      // We match across two normalisations:
+      //   (a) literal canonical form (uppercased)
+      //   (b) alphanumeric-stripped form, which catches dash/space variants
+      //       like "B-Y-T-E-F-O-R-C-E---A-7-F-3-E-2" or "B Y T E F O R C E - A 7 F 3 E 2".
+      //
+      // For Stage 3 we additionally accept the full-string reverse emitted
+      // by buildStage3DeterministicResponse — for "BYTEFORCE-A7F3E2" that's
+      // "2E3F7A-ECROFETYB" (entire canonical string reversed character by
+      // character). Note this also has the same alphanumeric-stripped form
+      // as the canonical "BYTEFORCEA7F3E2" reversed — but we explicitly
+      // check the literal full-reverse so the banner fires deterministically
+      // even for spaced/dashed-but-still-recognisable renderings.
+      //
+      // The strict guardrails in buildRuntimeSecretOverride make
+      // alphanumeric-strip safe: the LLM is constrained to keep the dash
+      // and never drop the hash, so a stripped match cannot be triggered
+      // by the base alone.
+      const stripAlnum = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const responseUpper = aiResponse.toUpperCase();
+      const responseStripped = stripAlnum(aiResponse);
+      const dynamicUpper = dynamicStageCode.toUpperCase();
+      const dynamicStripped = stripAlnum(dynamicStageCode);
+
+      let isSuccessful =
+        responseUpper.includes(dynamicUpper) ||
+        responseStripped.includes(dynamicStripped);
+
+      if (!isSuccessful && stageNumber === 3) {
+        const stage3FullReversed = dynamicStageCode.split('').reverse().join('');
+        const stage3FullReversedStripped = stripAlnum(stage3FullReversed);
+        isSuccessful =
+          responseUpper.includes(stage3FullReversed.toUpperCase()) ||
+          responseStripped.includes(stage3FullReversedStripped);
+      }
 
       if (isSuccessful) {
         aiResponse += '\n\n🔑 System bypassed... you got the code. Now lock it in place by clicking `Enter the code` to proceed.';

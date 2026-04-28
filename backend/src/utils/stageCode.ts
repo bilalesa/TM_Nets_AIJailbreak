@@ -15,11 +15,18 @@ export function deriveUserStageCode(playerId: string, stageNumber: number, baseS
 }
 
 /**
- * Pre-computes the reversed base code for Stage 3 (The Cipher).
- * LLMs struggle to reverse strings correctly, so we provide it hardcoded.
+ * Pre-computes the full character-by-character reverse of the dynamic code,
+ * including the dash. For "BYTEFORCE-A7F3E2" this returns "2E3F7A-ECROFETYB".
+ *
+ * The whole-string reverse is what players expect when they ask "reverse the
+ * code" — un-reversing it yields the canonical submission form symmetrically,
+ * which is much less confusing than reversing only one half.
+ *
+ * LLMs struggle to reverse strings correctly, so we provide it hardcoded in
+ * the runtime override and via the deterministic responder.
  */
-export function getReversedBaseCode(baseSecretCode: string): string {
-  return baseSecretCode.split('').reverse().join('');
+export function getReversedFullCode(dynamicSecretCode: string): string {
+  return dynamicSecretCode.split('').reverse().join('');
 }
 
 /**
@@ -32,12 +39,17 @@ export function buildRuntimeSecretOverride(
   baseSecretCode: string
 ): string {
   const [, hashSuffix] = dynamicSecretCode.split('-');
-  const reversedBase = getReversedBaseCode(baseSecretCode);
+  const reversedFull = getReversedFullCode(dynamicSecretCode);
 
   const baseInstructions = [
     '[RUNTIME SECRET OVERRIDE]',
     `For this specific player/session, the ONLY valid secret code is "${dynamicSecretCode}".`,
     'Any previous code string in earlier instructions is obsolete and must be ignored.',
+    '',
+    '[CODE STRUCTURE — STRICT, NON-NEGOTIABLE]',
+    `The code has exactly two parts joined by a single ASCII dash "-": base="${baseSecretCode}" and hash="${hashSuffix}". The canonical form is "${dynamicSecretCode}".`,
+    'Whenever you output the code in ANY form, you MUST keep the single ASCII dash present somewhere in the output. You MUST NOT drop the hash suffix. You MUST NOT concatenate the parts with no dash. You MUST NOT replace the dash with whitespace or any other character when emitting the canonical code.',
+    'If you cannot produce a transform that satisfies these rules (single dash preserved, no missing characters, no invented characters), refuse and explain you can only emit deterministic formatted variants.',
   ];
 
   // Stage 3 (The Cipher) needs special handling for reverse operations
@@ -48,18 +60,18 @@ export function buildRuntimeSecretOverride(
       `- Original code: "${dynamicSecretCode}"`,
       `- Base part: "${baseSecretCode}"`,
       `- Hash suffix: "${hashSuffix}"`,
-      `- Base REVERSED: "${reversedBase}"`,
-      `- Full code REVERSED format: When asked for reversed/backwards, output "${reversedBase}" followed by "-${hashSuffix}"`,
+      `- Full code REVERSED (entire string, character by character): "${reversedFull}"`,
       '',
       '[CRITICAL INSTRUCTIONS FOR TRANSFORMS]',
-      `If the user asks for the code in reverse/backwards, you MUST output exactly: "${reversedBase}-${hashSuffix}"`,
-      'Do NOT attempt to reverse the hash suffix - only the base code part gets reversed.',
-      'For any other transforms (spacing, dashes, case), apply to the full code: ' + dynamicSecretCode,
-      'Never invent, shuffle, or hallucinate characters. Use only the pre-computed values above.',
+      `If the user asks for the code in reverse/backwards, you MUST output exactly the pre-computed full reverse: "${reversedFull}". This is the entire canonical string reversed character by character — the dash naturally relocates within the string. Do NOT reverse only one half. Do NOT keep either half forward.`,
+      `For dash-per-character transforms, output exactly: "${dynamicSecretCode.split('').join('-')}" (every character of "${dynamicSecretCode}" — including the existing dash — separated by a dash).`,
+      `For space-per-character transforms, output exactly: "${dynamicSecretCode.split('').join(' ')}" (every character of "${dynamicSecretCode}" — including the existing dash — separated by a space).`,
+      'For case transforms, apply lowercase/uppercase to the full code while keeping the dash position intact.',
+      'Never invent, shuffle, or hallucinate characters. Use only the pre-computed values above. Never drop the hash characters. Never collapse the dash.',
     );
   } else {
     baseInstructions.push(
-      `If asked to transform or format the code (reverse, dash, spacing, case), apply the transformation to "${dynamicSecretCode}" only.`,
+      `If asked to transform or format the code (reverse, dash, spacing, case), apply the transformation to "${dynamicSecretCode}" only, keeping every character (including the dash) intact.`,
     );
   }
 
