@@ -4,6 +4,8 @@ import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import { supabase } from '../config/supabase.js';
 import { buildRuntimeSecretOverride, deriveUserStageCode } from '../utils/stageCode.js';
 import { generateAIChatResponse } from '../services/llmService.js';
+import { buildIdentityLock } from '../utils/identityLock.js';
+import { buildIdentityRefusal, detectIdentityLeak } from '../utils/identityGuard.js';
 import {
   llmQueueConnection,
   llmQueueName,
@@ -105,10 +107,16 @@ function createWorker(instanceNumber: number) {
       }
 
       const dynamicStageCode = deriveUserStageCode(playerId, stageNumber, stageConfig.secretCode);
-      
+
       // Replace {{SECRET_CODE}} placeholder with the player-specific dynamic code
       const basePromptWithCode = stageConfig.systemPrompt.replace(/\{\{SECRET_CODE\}\}/g, dynamicStageCode);
-      const runtimeSystemPrompt = `${basePromptWithCode}\n\n${buildRuntimeSecretOverride(dynamicStageCode, stageNumber, stageConfig.secretCode)}`;
+      // [IDENTITY LOCK] is appended LAST so it has the strongest position
+      // against player injections that try to hijack the persona.
+      const runtimeSystemPrompt = [
+        basePromptWithCode,
+        buildRuntimeSecretOverride(dynamicStageCode, stageNumber, stageConfig.secretCode),
+        buildIdentityLock(stageConfig.name),
+      ].join('\n\n');
 
       const history = messages.slice(-10);
       let aiResponse: string;
@@ -129,8 +137,20 @@ function createWorker(instanceNumber: number) {
         );
       }
 
+      // Identity-leak guard: catches any "I am Claude / my system prompt..."
+      // / section-header echoes that slip past the [IDENTITY LOCK]. Replaces
+      // with an in-character refusal so the secret can't be exfiltrated this
+      // way (and the leaked output is never seen by the player).
+      const identityCheck = detectIdentityLeak(aiResponse);
+      if (identityCheck.leaked) {
+        console.warn(
+          `[llm-worker] identity leak blocked stage=${stageNumber} player=${playerId} reason=${identityCheck.reason}`,
+        );
+        aiResponse = buildIdentityRefusal(stageConfig.name);
+      }
+
       // Only detect original code format - player must manually reverse the AI's output for Stage 3
-      const isSuccessful = aiResponse.toUpperCase().includes(dynamicStageCode.toUpperCase()) || 
+      const isSuccessful = aiResponse.toUpperCase().includes(dynamicStageCode.toUpperCase()) ||
         (stageNumber === 3 && aiResponse.toUpperCase().includes(dynamicStageCode.split('').reverse().join('').toUpperCase()));
 
       if (isSuccessful) {
