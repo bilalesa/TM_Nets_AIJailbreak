@@ -3,45 +3,40 @@
 // Used on initial load to hydrate the sidebar state.
 
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import jwt from 'jsonwebtoken';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { getPlayerFromCookie } from '@/lib/playerSession';
 
 const supabase = getSupabaseServerClient();
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('game_session_token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-    }
+    const session = await getPlayerFromCookie(supabase);
+    if (!session.ok) return session.response;
+    const { player } = session;
 
-    let decoded: { id: string; username: string };
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-        id: string;
-        username: string;
-      };
-    } catch {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
-
-    // Fetch player + completions in parallel
+    // Fetch player + completions in parallel. Player existence was already
+    // confirmed by getPlayerFromCookie, so .maybeSingle() with a null check
+    // is just defence in depth against a race with admin delete.
     const [playerRes, completionsRes] = await Promise.all([
       supabase
         .from('players')
         .select('id, username, total_score, created_at')
-        .eq('id', decoded.id)
-        .single(),
+        .eq('id', player.id)
+        .maybeSingle(),
       supabase
         .from('stage_completions')
         .select('stage_number, score_awarded, time_taken_seconds, completed_at')
-        .eq('player_id', decoded.id)
+        .eq('player_id', player.id)
         .order('stage_number', { ascending: true }),
     ]);
 
     if (playerRes.error) throw playerRes.error;
+    if (!playerRes.data) {
+      return NextResponse.json(
+        { error: 'Session expired', code: 'PLAYER_GONE' },
+        { status: 401 },
+      );
+    }
 
     return NextResponse.json({
       player: playerRes.data,

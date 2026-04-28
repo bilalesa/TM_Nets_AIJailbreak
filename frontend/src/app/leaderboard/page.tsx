@@ -314,7 +314,11 @@ export default function LeaderboardPage() {
 
         {/* Main content */}
         <main className="flex-1 flex flex-col min-w-0 h-full p-4 sm:p-6 lg:p-8">
-          {/* ── Hero stats cards ── */}
+          {/* ── Hero stats cards ──
+              Hidden until the player has at least one completion. Showing
+              empty "—" placeholders before the user has played felt noisy —
+              the leaderboard table below carries the same info on hover/scan. */}
+          {currentPlayer && currentPlayer.stagesPassed > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -390,6 +394,7 @@ export default function LeaderboardPage() {
               </div>
             </div>
           </motion.div>
+          )}
 
           {/* ── Leaderboard table ── */}
           <motion.div

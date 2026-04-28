@@ -44,6 +44,9 @@ export default async function AuthedAdminLayout({
               <NavLink href="/admin/leaderboard">Leaderboard</NavLink>
               <NavLink href="/admin/stages">Stages</NavLink>
               <NavLink href="/admin/audit">Audit Log</NavLink>
+              {admin.role === 'super_admin' && (
+                <NavLink href="/admin/system">System</NavLink>
+              )}
             </nav>
           </div>
           <div className="flex w-full items-center justify-between gap-3 text-sm sm:w-auto sm:justify-end">

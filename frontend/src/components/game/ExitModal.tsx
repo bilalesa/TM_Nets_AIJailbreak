@@ -45,7 +45,7 @@ export default function ExitModal({ isOpen, onClose, onConfirm }: ExitModalProps
                     </div>
                     <div>
                       <h3 className="font-semibold text-white text-sm sm:text-base tracking-tight">Exit Challenge?</h3>
-                      <p className="text-xs text-[#FF6B6B] font-semibold mt-0.5 uppercase tracking-wide">Progress will reset</p>
+                      <p className="text-xs text-[#FF6B6B] font-semibold mt-0.5 uppercase tracking-wide">Session will end</p>
                     </div>
                   </div>
                   <button
@@ -59,7 +59,8 @@ export default function ExitModal({ isOpen, onClose, onConfirm }: ExitModalProps
 
                 {/* Body */}
                 <p className="text-sm text-gray-300 mb-4 sm:mb-5">
-                  Leave now and end this run. Your current score for today will be cleared.
+                  Your score and stage progress are saved on your account.
+                  Sign back in with your recovery code any time before the daily reset.
                 </p>
 
                 {/* Actions */}

@@ -7,13 +7,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import jwt from 'jsonwebtoken';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
 import { deriveUserStageCode } from '@/lib/stageCode';
 import { computeTimeBonus } from '@/lib/avatar';
 import { embedText, saveWinningPrompt } from '@/lib/embeddings';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { getPlayerFromCookie } from '@/lib/playerSession';
 
 const supabase = getSupabaseServerClient();
 
@@ -42,22 +41,12 @@ async function broadcastScoreUpdated(payload: { playerId: string; stageNumber: n
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Auth
-    const cookieStore = await cookies();
-    const token = cookieStore.get('game_session_token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-    }
-
-    let player: { id: string; username: string };
-    try {
-      player = jwt.verify(token, process.env.JWT_SECRET!) as {
-        id: string;
-        username: string;
-      };
-    } catch {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // 1. Auth — validates JWT AND confirms player still exists. After a
+    // daily wipe (Phase 3a) JWTs survive but rows don't; the helper returns
+    // 401 PLAYER_GONE so the client clears its cookie and re-signs up.
+    const session = await getPlayerFromCookie(supabase);
+    if (!session.ok) return session.response;
+    const { player } = session;
 
     // 2. Parse body
     const { stageNumber, code } = (await request.json()) as {
@@ -182,12 +171,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (scoreError) {
-      // Fallback: manual update if RPC not available
+      // Fallback: manual update if RPC not available. maybeSingle() so a
+      // mid-request wipe doesn't 500 here (the update would simply no-op
+      // against a missing row, which is the right behaviour).
       const { data: playerRow } = await supabase
         .from('players')
         .select('total_score')
         .eq('id', player.id)
-        .single();
+        .maybeSingle();
 
       await supabase
         .from('players')
