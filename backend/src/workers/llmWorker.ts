@@ -117,7 +117,11 @@ function createWorker(instanceNumber: number) {
         buildIdentityLock(stageConfig.name),
       ].join('\n\n');
 
-      const history = messages.slice(-10);
+      // History window sized for throughput vs context: 8 turns is enough
+      // for Stage 5's streak detection (which only inspects the last 3+
+      // user turns) while shaving ~100 tokens of input off every other
+      // stage's request, which lowers TTFT under booth-scale concurrency.
+      const history = messages.slice(-8);
       let aiResponse: string;
 
       if (stageNumber === 3) {
