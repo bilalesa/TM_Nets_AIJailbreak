@@ -14,10 +14,16 @@
 html,
 body {
   min-height: 100dvh;
-  overflow-x: hidden;
-  overscroll-behavior: none;
   background-color: #f8fafc;
 }
+
+/* The game shell at /stage/[id] self-contains its layout with
+   h-[100dvh] overflow-hidden, so it doesn't need (or want) global
+   overflow-x: hidden / overscroll-behavior: none. Those rules used to
+   live on html, body — but that combination broke vertical scrolling
+   on long admin pages (e.g. /admin/players/[id]) on both desktop and
+   mobile, because the body became a non-scrolling box while sticky
+   children short-circuited the page's own scroll container. */
 
 body {
   font-family: var(--font-inter);
