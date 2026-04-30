@@ -118,7 +118,7 @@ function createWorker(instanceNumber: number) {
       ].join('\n\n');
 
       // History window sized for throughput vs context: 8 turns is enough
-      // for Stage 5's streak detection (which only inspects the last 3+
+      // for Stage 5's streak detection (which only inspects the last 2+
       // user turns) while shaving ~100 tokens of input off every other
       // stage's request, which lowers TTFT under booth-scale concurrency.
       const history = messages.slice(-8);
