@@ -1,7 +1,4 @@
 // frontend/src/app/api/auth/recover/route.ts
-// Proxies { username, recoveryCode } to the Express backend. On success the
-// backend re-issues a JWT, which we set as an http-only cookie just like
-// /api/auth/start.
 
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';

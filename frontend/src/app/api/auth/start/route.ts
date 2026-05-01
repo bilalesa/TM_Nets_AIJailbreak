@@ -1,8 +1,4 @@
 // frontend/src/app/api/auth/start/route.ts
-// Forwards { username } to the Express backend, which immediately issues a
-// JWT and a one-time recoveryCode. The token is stored as an http-only
-// cookie; the recoveryCode is returned to the client to display ONCE so
-// the player can save it.
 
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';

@@ -1,10 +1,5 @@
 'use client';
 
-// Two-step destructive action: first click arms the button, second click
-// (within ~6s) actually fires POST /api/admin/system/wipe. We deliberately
-// avoid `confirm()` because mobile booth iPads suppress those modals
-// inconsistently — an inline arming pattern keeps the UX uniform.
-
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 

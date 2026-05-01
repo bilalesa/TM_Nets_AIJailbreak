@@ -1,16 +1,4 @@
 // frontend/src/app/api/game/stage-history/route.ts
-//
-// Returns the player's chat history for a stage, reconstructed from
-// prompt_logs. Used by the stage page to rehydrate the conversation when
-// sessionStorage is empty (e.g. after a recovery-code re-login on a new
-// browser tab — the server-authoritative timer keeps running, so without
-// this endpoint the player would lose the LLM context AND keep paying
-// the full time penalty).
-//
-// One prompt_logs row → two messages: the user prompt + the bot's reply.
-// Rows where ai_response is null (worker still processing or failed) are
-// skipped; the player can re-send if needed. Order is ascending by
-// created_at so the chat reads top-to-bottom in original order.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';

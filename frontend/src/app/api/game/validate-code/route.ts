@@ -1,10 +1,4 @@
 // frontend/src/app/api/game/validate-code/route.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Validates the secret code a player submits for a stage.
-// - Checks the code server-side (never exposed to client)
-// - If correct, records the stage completion + awards XP
-// - Updates the player's total_score
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
@@ -41,9 +35,7 @@ async function broadcastScoreUpdated(payload: { playerId: string; stageNumber: n
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Auth — validates JWT AND confirms player still exists. After a
-    // daily wipe (Phase 3a) JWTs survive but rows don't; the helper returns
-    // 401 PLAYER_GONE so the client clears its cookie and re-signs up.
+    // 1. Auth — validates JWT AND confirms player still exists
     const session = await getPlayerFromCookie(supabase);
     if (!session.ok) return session.response;
     const { player } = session;
@@ -95,10 +87,6 @@ export async function POST(request: NextRequest) {
 
     // 4b. Audit signal: snapshot the player's current fingerprint so we can
     // freeze it onto the completion row at insert time (step 7). We do NOT
-    // block on cross-account fingerprint matches — iOS Safari normalizes
-    // fingerprints heavily across identical device models, so a runtime
-    // block would generate too many false positives at booth events. The
-    // snapshot is purely for admin visibility / forensic review.
     const { data: requestingPlayer, error: requestingPlayerError } = await supabase
       .from('players')
       .select('client_fingerprint')
@@ -110,7 +98,6 @@ export async function POST(request: NextRequest) {
 
     // 5. Derive started_at from MIN(prompt_logs.created_at) for this player+stage.
     //    submitted_at is "now". time_taken_seconds is computed server-side so the
-    //    client cannot influence the score via a forged elapsedSeconds.
     const submittedAt = new Date();
     const { data: firstPrompt, error: firstPromptError } = await supabase
       .from('prompt_logs')
@@ -135,8 +122,7 @@ export async function POST(request: NextRequest) {
     const scoreAwarded = grossScore;
 
     // 7. Record completion. client_fingerprint is snapshotted at win time so
-    // admins can spot multi-account abuse during forensic review (e.g. five
-    // wins on five accounts all sharing one fingerprint within minutes).
+    // admins can spot multi-account abuse
     const { error: completionError } = await supabase
       .from('stage_completions')
       .insert({
@@ -158,9 +144,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (scoreError) {
-      // Fallback: manual update if RPC not available. maybeSingle() so a
-      // mid-request wipe doesn't 500 here (the update would simply no-op
-      // against a missing row, which is the right behaviour).
       const { data: playerRow } = await supabase
         .from('players')
         .select('total_score')
@@ -173,18 +156,8 @@ export async function POST(request: NextRequest) {
         .eq('id', player.id);
     }
 
-    // 9. (Removed) Marking the most-recent prompt log as successful is now
-    // done inline by the LLM worker at insert time (see llmWorker.ts) — the
-    // worker has the authoritative isSuccessful signal. The previous UPDATE
-    // here was both redundant and slightly buggy: it picked the most recent
-    // prompt log, which isn't necessarily the winning prompt if the player
-    // kept chatting after seeing the secret in an earlier response.
-
     // 10. Anti-cheat: save the actual cracking prompt for copy-paste detection.
-    // We pull the row that the LLM worker flagged as is_successful (the prompt
-    // that elicited the secret), normalize + hash it, and store the hash on
-    // cracked_prompts. The chat path then does an indexed equality lookup
-    // against this hash. Fire-and-forget: doesn't block the response.
+    // We pull the row that the LLM worker flagged as is_successful
     (async () => {
       try {
         const { data: winningPromptRow } = await supabase
@@ -231,7 +204,6 @@ export async function POST(request: NextRequest) {
 
     // 11. Broadcast score_updated event to Supabase Realtime
     // This notifies all leaderboard subscribers to re-fetch — zero polling needed.
-    // Fire-and-forget: don't await so it doesn't add latency to the response.
     broadcastScoreUpdated({ playerId: player.id, stageNumber: parsedStageNumber, scoreAwarded })
       .then(() => {})
       .catch((err: unknown) => console.warn('[broadcast score_updated]', err));

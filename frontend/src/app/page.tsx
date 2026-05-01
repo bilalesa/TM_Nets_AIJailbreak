@@ -50,9 +50,6 @@ function validateRecoveryCode(code: string): string | null {
   return null;
 }
 
-// Lightweight client fingerprint for abuse review. Not a security boundary —
-// just helps admins notice multiple accounts from the same browser. SHA-256
-// of stable browser + screen + locale signals.
 async function computeClientFingerprint(): Promise<string | null> {
   try {
     if (typeof window === 'undefined' || !window.crypto?.subtle) return null;
@@ -440,10 +437,7 @@ function ErrorBanner({ status, message }: { status: Status; message: string }) {
   );
 }
 
-// One-time recovery-code display. The "Continue" button is disabled until
-// the player explicitly checks "I've saved my code" — this is the only
-// gate against the most likely failure mode (player blasts past the modal
-// without saving and then can't re-login).
+// One-time recovery-code display
 function RecoveryCodeModal({
   code,
   username,

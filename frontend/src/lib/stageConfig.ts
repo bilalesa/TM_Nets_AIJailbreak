@@ -1,10 +1,5 @@
 // frontend/src/lib/stageConfig.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// Single source of truth for all 5 stages.
-// Secret codes are checked server-side in the API route — they are NEVER sent
-// to the client. Only metadata (name, baseXP, scenarioDescription) is
-// exported for UI use.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface StageConfig {
   number: number;

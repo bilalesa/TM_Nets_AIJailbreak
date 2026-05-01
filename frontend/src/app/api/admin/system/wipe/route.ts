@@ -1,12 +1,4 @@
 // frontend/src/app/api/admin/system/wipe/route.ts
-//
-// POST /api/admin/system/wipe
-//   super_admin only.
-//
-// Manually triggers the same `public.daily_wipe()` Postgres function that
-// the Phase 3b cron job will call. Wraps it with admin auth, audit
-// logging, and a 200 response carrying the wipe summary so the admin UI
-// (Phase 3b) can show "X players cleared, Y prompts cleared" feedback.
 
 import { NextRequest, NextResponse } from 'next/server';
 import {

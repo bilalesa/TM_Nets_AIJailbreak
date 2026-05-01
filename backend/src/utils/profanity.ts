@@ -1,14 +1,5 @@
 // Profanity filter. Used for username validation at signup and as a
 // pre-LLM gate on chat prompts.
-//
-// Matching strategy:
-//   1. Lowercase the input
-//   2. Normalize common leetspeak substitutions (4→a, 3→e, 1→i/l, 0→o, 5→s, 7→t, @→a, $→s)
-//   3. Strip non-letter characters so "f.u.c.k" / "f_u_c_k" still match
-//   4. Substring match against the wordlist
-//
-// This is intentionally simple — meant to catch lazy attempts, not pass an
-// adversarial test. Tune the list to your audience.
 
 const RAW_WORDS = [
   'fuck',

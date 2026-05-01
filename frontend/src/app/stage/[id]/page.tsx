@@ -179,13 +179,6 @@ export default function StagePage() {
 
   // ── 2. Load or seed messages ──────────────────────────────────────
   // Hydration order:
-  //   1. sessionStorage (same-tab continuation, fastest)
-  //   2. /api/game/stage-history (rehydrate after a recovery-code re-login
-  //      in a fresh tab — sessionStorage is empty but the player has prior
-  //      prompt_logs for this stage, and the server-authoritative timer is
-  //      already running. Without this fetch the player would lose the
-  //      LLM context and keep paying the full time penalty.)
-  //   3. Seed opening message (genuinely first visit)
   useEffect(() => {
     if (!stageConfig) return;
 
@@ -234,10 +227,6 @@ export default function StagePage() {
           ]);
           // The player already has prompts logged → timer is server-running.
           // Resume the displayed stopwatch from the first prompt's timestamp
-          // so the UI matches the server-authoritative started_at (which is
-          // MIN(prompt_logs.created_at) — see validate-code/route.ts). Without
-          // this the displayed timer would either freeze at 0 (previous bug)
-          // or start ticking from 0 and lie low about real elapsed time.
           resumeTimer(data.messages[0].timestamp);
           setTimerStarted(true);
           return;

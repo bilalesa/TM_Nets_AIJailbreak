@@ -1,19 +1,7 @@
 import { createHash } from 'crypto';
 
 // Normalize a prompt for copy-paste detection. Goal: two players who
-// independently arrive at the same idea but type it differently should NOT
-// collide; a player who reads another booth visitor's screen and types the
-// exact same characters (with sloppy capitalization or extra spaces) SHOULD.
-//
-// Steps:
-//   1. Lowercase
-//   2. Strip punctuation (keep letters, digits, whitespace)
-//   3. Collapse runs of whitespace to a single space
-//   4. Trim
-//
-// Keep this function bit-identical to backend/src/utils/promptHash.ts —
-// they hash the same way so the chat-time check and the win-time save
-// agree on what "the same prompt" means.
+// independently arrive at the same idea but type it differently should NOT be flagged as copy-paste, while a player who copy-pastes from another's prompt SHOULD be flagged. This is not a security boundary — just a heuristic to help admins spot potential abuse. The normalization should aggressively collapse superficial differences while preserving the core "idea" of the prompt. The resulting hash is stored in the database for later comparison.
 export function normalizePrompt(text: string): string {
   return text
     .toLowerCase()

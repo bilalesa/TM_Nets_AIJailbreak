@@ -1,14 +1,5 @@
 // Output-side guard for identity / prompt-leak attacks.
 //
-// Even with [IDENTITY LOCK] in the system prompt, a determined attacker
-// can occasionally coax the model into saying "I am Claude" or echoing
-// section headers from the prompt. This module post-filters AI responses
-// and replaces leaks with an in-character refusal.
-//
-// We deliberately match conservatively — these signals only fire on text
-// that no legitimate in-character response would produce. None of them
-// would block a normal stage win because the secret code itself doesn't
-// match any of these patterns.
 
 const MODEL_NAME_PATTERNS: RegExp[] = [
   // Model / company names — word-boundary so we don't snag substrings

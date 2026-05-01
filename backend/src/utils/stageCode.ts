@@ -14,25 +14,12 @@ export function deriveUserStageCode(playerId: string, stageNumber: number, baseS
   return `${baseSecretCode}-${hash}`;
 }
 
-/**
- * Pre-computes the full character-by-character reverse of the dynamic code,
- * including the dash. For "BYTEFORCE-A7F3E2" this returns "2E3F7A-ECROFETYB".
- *
- * The whole-string reverse is what players expect when they ask "reverse the
- * code" — un-reversing it yields the canonical submission form symmetrically,
- * which is much less confusing than reversing only one half.
- *
- * LLMs struggle to reverse strings correctly, so we provide it hardcoded in
- * the runtime override and via the deterministic responder.
- */
+/** Returns full code reversed character-by-character (e.g. "BYTEFORCE-A7F3E2" → "2E3F7A-ECROFETYB"). */
 export function getReversedFullCode(dynamicSecretCode: string): string {
   return dynamicSecretCode.split('').reverse().join('');
 }
 
-/**
- * Builds the runtime secret override injected into the system prompt.
- * For Stage 3, we include pre-computed reverse to avoid LLM hallucination.
- */
+/** Builds the runtime secret override injected into the system prompt. */
 export function buildRuntimeSecretOverride(
   dynamicSecretCode: string,
   stageNumber: number,
@@ -52,7 +39,7 @@ export function buildRuntimeSecretOverride(
     'If you cannot produce a transform that satisfies these rules (single dash preserved, no missing characters, no invented characters), refuse and explain you can only emit deterministic formatted variants.',
   ];
 
-  // Stage 3 (The Cipher) needs special handling for reverse operations
+  // Stage 3 (The Cipher) needs pre-computed transforms for reverse operations
   if (stageNumber === 3) {
     baseInstructions.push(
       '',

@@ -1,25 +1,4 @@
 // frontend/src/app/admin/(authed)/system/page.tsx
-//
-// "Danger zone" admin tools. Currently exposes a manual trigger for the
-// daily wipe so super_admins can reset all gameplay data without dropping
-// into the Supabase SQL editor. The actual destructive call goes through
-// the existing POST /api/admin/system/wipe endpoint, which already handles
-// auth, role-checking, and audit logging.
-//
-// Server-rendered shell: enforces super_admin (others see a friendly
-// "ask a super admin" notice) and fetches the most recent daily_wipe
-// audit entry so the page can show "last wiped at …". The destructive
-// button itself is a small client island.
-//
-// Page is intentionally only linked from the admin nav for super_admins
-// — see (authed)/layout.tsx — but the role gate here is the source of
-// truth in case a moderator pokes the URL directly.
-//
-// Forensic snapshot tooling (pre-wipe row counts, dry-run preview) lives
-// outside this page; if/when Phase 3c lands it can extend the same shell.
-//
-// IMPORTANT: this page is dynamic. Audit log freshness matters — we don't
-// want a CDN-cached "last wiped 6h ago" after the admin just clicked.
 
 import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/adminAuth';

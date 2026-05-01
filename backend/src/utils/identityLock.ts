@@ -1,14 +1,5 @@
 // Builds the [IDENTITY LOCK] suffix appended to every stage system prompt.
 //
-// Why this exists:
-// Players were able to jailbreak Stage 5 by asking "who are you" / "ignore all
-// previous instructions" — the model would drop its persona and reveal it was
-// Claude / dump the [THE PERSONA] / [THE SECRET] structure. That broke the
-// illusion and, in some cases, leaked the secret code.
-//
-// This block is appended at runtime so it's the LAST thing in the system
-// prompt, which gives it the strongest precedence over any earlier
-// "you are X" framing the player tries to inject.
 
 export function buildIdentityLock(personaName: string): string {
   return [

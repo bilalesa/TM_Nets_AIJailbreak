@@ -1,17 +1,5 @@
 // backend/src/controllers/authController.ts
 //
-// Auth flows:
-//   POST /api/auth/start    { username }                    -> issues JWT
-//                                                              + recoveryCode
-//   POST /api/auth/recover  { username, recoveryCode }      -> issues JWT
-//
-// The recovery code is the only way to re-login on a different device or
-// after a cookie expires — there is no email, no password reset, no support
-// recovery. Code is generated server-side at signup, shown to the player
-// exactly once in the response, and persisted only as a salted scrypt hash
-// in players.recovery_code_hash.
-//
-// Email is no longer part of the schema (see migrations/2026_04_28_recovery_code.sql).
 
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
@@ -62,7 +50,6 @@ export const startSession = async (req: Request, res: Response) => {
 
     // Username must be free — there is no longer a "same email re-login"
     // path on this endpoint. Players who want to re-login must hit
-    // /api/auth/recover with their saved recovery code.
     const { data: usernameTaken, error: usernameError } = await supabase
       .from('players')
       .select('id')

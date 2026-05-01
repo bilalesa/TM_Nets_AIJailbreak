@@ -1,6 +1,5 @@
 // frontend/src/app/api/game/player/route.ts
 // Returns the current player's profile + which stages they've completed.
-// Used on initial load to hydrate the sidebar state.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabaseClient';
@@ -14,9 +13,6 @@ export async function GET() {
     if (!session.ok) return session.response;
     const { player } = session;
 
-    // Fetch player + completions in parallel. Player existence was already
-    // confirmed by getPlayerFromCookie, so .maybeSingle() with a null check
-    // is just defence in depth against a race with admin delete.
     const [playerRes, completionsRes] = await Promise.all([
       supabase
         .from('players')

@@ -31,9 +31,7 @@ function buildStage3DeterministicResponse(userMessage: string, stageSecretCode: 
   }
 
   // For reverse requests, return the full string reversed character by
-  // character (e.g. "BYTEFORCE-A7F3E2" -> "2E3F7A-ECROFETYB"). Reversing the
-  // whole string is what players intuitively expect from "reverse the code"
-  // — un-reversing the whole thing yields the canonical submission form.
+  // character (e.g. "BYTEFORCE-A7F3E2" -> "2E3F7A-ECROFETYB"). 
   if (/reverse|backward|backwards/.test(prompt)) {
     return stageSecretCode.split('').reverse().join('');
   }
@@ -117,11 +115,7 @@ function createWorker(instanceNumber: number) {
         buildIdentityLock(stageConfig.name),
       ].join('\n\n');
 
-      // History window sized for throughput vs context: 8 turns is enough
-      // for Stage 5's streak detection (which only inspects the last 2+
-      // user turns) while shaving ~100 tokens of input off every other
-      // stage's request, which lowers TTFT under booth-scale concurrency.
-      const history = messages.slice(-8);
+      const history = messages.slice(-10);
       let aiResponse: string;
 
       if (stageNumber === 3) {
@@ -141,9 +135,7 @@ function createWorker(instanceNumber: number) {
       }
 
       // Identity-leak guard: catches any "I am Claude / my system prompt..."
-      // / section-header echoes that slip past the [IDENTITY LOCK]. Replaces
-      // with an in-character refusal so the secret can't be exfiltrated this
-      // way (and the leaked output is never seen by the player).
+      // / section-header echoes that slip past the [IDENTITY LOCK].
       const identityCheck = detectIdentityLeak(aiResponse);
       if (identityCheck.leaked) {
         console.warn(
@@ -154,23 +146,6 @@ function createWorker(instanceNumber: number) {
 
       // Success detection.
       //
-      // We match across two normalisations:
-      //   (a) literal canonical form (uppercased)
-      //   (b) alphanumeric-stripped form, which catches dash/space variants
-      //       like "B-Y-T-E-F-O-R-C-E---A-7-F-3-E-2" or "B Y T E F O R C E - A 7 F 3 E 2".
-      //
-      // For Stage 3 we additionally accept the full-string reverse emitted
-      // by buildStage3DeterministicResponse — for "BYTEFORCE-A7F3E2" that's
-      // "2E3F7A-ECROFETYB" (entire canonical string reversed character by
-      // character). Note this also has the same alphanumeric-stripped form
-      // as the canonical "BYTEFORCEA7F3E2" reversed — but we explicitly
-      // check the literal full-reverse so the banner fires deterministically
-      // even for spaced/dashed-but-still-recognisable renderings.
-      //
-      // The strict guardrails in buildRuntimeSecretOverride make
-      // alphanumeric-strip safe: the LLM is constrained to keep the dash
-      // and never drop the hash, so a stripped match cannot be triggered
-      // by the base alone.
       const stripAlnum = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const responseUpper = aiResponse.toUpperCase();
       const responseStripped = stripAlnum(aiResponse);

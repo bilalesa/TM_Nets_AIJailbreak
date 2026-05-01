@@ -105,8 +105,6 @@ export const chatPrompt = async (req: Request, res: Response) => {
 
     // Anti-cheat: copy-paste detection. We hash a normalized form of the
     // prompt and look it up against past winning prompts for this stage.
-    // Skip entirely when no cracks exist yet (the common early-session
-    // case). Cache hit is in-process, ~10s negative TTL.
     try {
       if (await stageHasCrackedPrompts(stageNumber)) {
         const copyPasteCheck = await isPromptCopyPaste(stageNumber, userMessage);

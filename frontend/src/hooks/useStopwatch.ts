@@ -90,11 +90,7 @@ export function useStopwatch(autoStart = false, persistKey?: string) {
   }, []);
 
   // Resume the stopwatch from a known wall-clock start time. Used when we
-  // rehydrate a session after a recovery-code re-login on a fresh tab: the
-  // server-authoritative timer has been running since the player's first
-  // prompt, so the displayed timer must match that elapsed — not restart
-  // from zero. Callers pass the timestamp (ms) of the first prompt; we
-  // seed `accumulated` with the gap between then and now, then start ticking.
+  // rehydrate a session after a recovery-code re-login on a fresh tab
   const resume = useCallback((startTimestampMs: number) => {
     const elapsedSinceStart = Math.max(
       0,

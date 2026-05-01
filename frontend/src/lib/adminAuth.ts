@@ -1,6 +1,5 @@
 // frontend/src/lib/adminAuth.ts
-// Admin authentication: bcrypt password verification, JWT issuance, session
-// validation, and audit logging. All admin routes import from here.
+// Admin authentication: bcrypt password verification, JWT issuance, session management via httpOnly cookies, and role-based access control.
 
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
