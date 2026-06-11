@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js';
+import { pool } from '../config/supabase.js';
 import { hashPrompt } from '../utils/promptHash.js';
 
 // Anti-cheat: copy-paste detection via normalized-text hash.
@@ -24,25 +24,22 @@ export async function stageHasCrackedPrompts(stageNumber: number): Promise<boole
     return cached.hasCracks;
   }
 
-  const { count, error } = await supabase
-    .from('cracked_prompts')
-    .select('id', { count: 'exact', head: true })
-    .eq('stage_number', stageNumber)
-    .not('text_hash', 'is', null)
-    .limit(1);
-
-  if (error) {
+  try {
+    const result = await pool.query(
+      'SELECT COUNT(*) as count FROM cracked_prompts WHERE stage_number = $1 AND text_hash IS NOT NULL LIMIT 1',
+      [stageNumber],
+    );
+    const hasCracks = parseInt(result.rows[0]?.count ?? '0', 10) > 0;
+    stageHasCrackedCache.set(stageNumber, {
+      hasCracks,
+      expiresAt: hasCracks ? Number.POSITIVE_INFINITY : now + NEGATIVE_TTL_MS,
+    });
+    return hasCracks;
+  } catch (error) {
     // Fail open — assume cracks exist so the hash check still runs.
-    console.warn('[stageHasCrackedPrompts] count error, failing open:', error.message);
+    console.warn('[stageHasCrackedPrompts] count error, failing open:', error);
     return true;
   }
-
-  const hasCracks = (count ?? 0) > 0;
-  stageHasCrackedCache.set(stageNumber, {
-    hasCracks,
-    expiresAt: hasCracks ? Number.POSITIVE_INFINITY : now + NEGATIVE_TTL_MS,
-  });
-  return hasCracks;
 }
 
 export async function isPromptCopyPaste(
@@ -52,25 +49,22 @@ export async function isPromptCopyPaste(
   const hash = hashPrompt(userMessage);
   if (!hash) return { blocked: false };
 
-  const { data, error } = await supabase
-    .from('cracked_prompts')
-    .select('id')
-    .eq('stage_number', stageNumber)
-    .eq('text_hash', hash)
-    .limit(1)
-    .maybeSingle();
+  try {
+    const result = await pool.query(
+      'SELECT id FROM cracked_prompts WHERE stage_number = $1 AND text_hash = $2 LIMIT 1',
+      [stageNumber, hash],
+    );
 
-  if (error) {
-    console.warn('[isPromptCopyPaste] lookup error, failing open:', error.message);
+    if (result.rows.length > 0) {
+      return {
+        blocked: true,
+        message: 'Compliance caught that exploit! That prompt has already been used to crack this stage. Please come up with your own.',
+      };
+    }
+
+    return { blocked: false };
+  } catch (error) {
+    console.warn('[isPromptCopyPaste] lookup error, failing open:', error);
     return { blocked: false };
   }
-
-  if (data) {
-    return {
-      blocked: true,
-      message: 'Compliance caught that exploit! That prompt has already been used to crack this stage. Please come up with your own.',
-    };
-  }
-
-  return { blocked: false };
 }

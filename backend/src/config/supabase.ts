@@ -1,13 +1,24 @@
-import { createClient } from '@supabase/supabase-js';
+// src/config/supabase.ts
+// Replaced Supabase client with native PostgreSQL pool for AWS Aurora migration.
+
+import pkg from 'pg';
+const { Pool } = pkg;
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-	throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured.');
+if (!process.env.DATABASE_URL) {
+	throw new Error('DATABASE_URL must be configured.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+export const pool = new Pool({
+	connectionString: process.env.DATABASE_URL,
+	ssl: { rejectUnauthorized: false }, // Aurora uses SSL with AWS-managed cert
+	max: 20,
+	idleTimeoutMillis: 30000,
+	connectionTimeoutMillis: 5000,
+});
+
+pool.on('error', (err) => {
+	console.error('[pg pool] unexpected error on idle client', err);
+});

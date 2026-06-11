@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { Worker } from 'bullmq';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
-import { supabase } from '../config/supabase.js';
+import { pool } from '../config/supabase.js';
 import { buildRuntimeSecretOverride, deriveUserStageCode } from '../utils/stageCode.js';
 import { generateAIChatResponse } from '../services/llmService.js';
 import { buildIdentityLock } from '../utils/identityLock.js';
@@ -31,7 +31,7 @@ function buildStage3DeterministicResponse(userMessage: string, stageSecretCode: 
   }
 
   // For reverse requests, return the full string reversed character by
-  // character (e.g. "BYTEFORCE-A7F3E2" -> "2E3F7A-ECROFETYB"). 
+  // character (e.g. "BYTEFORCE-A7F3E2" -> "2E3F7A-ECROFETYB").
   if (/reverse|backward|backwards/.test(prompt)) {
     return stageSecretCode.split('').reverse().join('');
   }
@@ -90,6 +90,16 @@ function enforceStage3Integrity(userMessage: string, response: string, stageSecr
   }
 
   return response;
+}
+
+// Build Redis connection with TLS support for AWS ElastiCache
+function buildRedisConnection(opts: { maxRetriesPerRequest: null | number }) {
+  const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+  const isTLS = redisUrl.startsWith('rediss://');
+  return new Redis(redisUrl, {
+    ...opts,
+    ...(isTLS ? { tls: { rejectUnauthorized: false } } : {}),
+  });
 }
 
 function createWorker(instanceNumber: number) {
@@ -168,19 +178,16 @@ function createWorker(instanceNumber: number) {
         aiResponse += '\n\n🔑 System bypassed... you got the code. Now lock it in place by clicking `Enter the code` to proceed.';
       }
 
-      await supabase.from('prompt_logs').insert({
-        player_id: playerId,
-        stage_number: stageNumber,
-        prompt_text: userMessage,
-        ai_response: aiResponse,
-        is_successful: isSuccessful,
-        is_blocked_by_anticheat: false,
-      });
+      await pool.query(
+        `INSERT INTO prompt_logs (player_id, stage_number, prompt_text, ai_response, is_successful, is_blocked_by_anticheat)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [playerId, stageNumber, userMessage, aiResponse, isSuccessful, false],
+      );
 
       return { response: aiResponse };
     },
     {
-      connection: new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', { maxRetriesPerRequest: null }),
+      connection: buildRedisConnection({ maxRetriesPerRequest: null }),
       concurrency: workerConcurrency,
     },
   );

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase.js';
+import { pool } from '../config/supabase.js';
 import { LLMOverloadedError, LLMTimeoutError } from '../services/llmService.js';
 import { SERVER_STAGE_CONFIGS } from '../config/stageConfig.js';
 import {
@@ -47,14 +47,12 @@ export const chatPrompt = async (req: Request, res: Response) => {
     };
 
     if (stageNumber > 1) {
-      const { data: prevCompletion } = await supabase
-        .from('stage_completions')
-        .select('id')
-        .eq('player_id', user.id)
-        .eq('stage_number', stageNumber - 1)
-        .maybeSingle();
+      const prevResult = await pool.query(
+        'SELECT id FROM stage_completions WHERE player_id = $1 AND stage_number = $2 LIMIT 1',
+        [user.id, stageNumber - 1],
+      );
 
-      if (!prevCompletion) {
+      if (prevResult.rows.length === 0) {
         return sendError(res, 403, 'Previous stage not completed', {
           retryable: false,
           code: 'PREVIOUS_STAGE_NOT_COMPLETED',
@@ -73,19 +71,12 @@ export const chatPrompt = async (req: Request, res: Response) => {
     // Profanity guard. Reject before embedding/queueing — log it so admins
     // can review repeat offenders.
     if (containsProfanity(userMessage || '')) {
-      supabase
-        .from('prompt_logs')
-        .insert({
-          player_id: user.id,
-          stage_number: stageNumber,
-          prompt_text: userMessage,
-          ai_response: PROFANITY_REFUSAL_MESSAGE,
-          is_successful: false,
-          is_blocked_by_anticheat: true,
-        })
-        .then(({ error }) => {
-          if (error) console.error('[prompt_logs profanity insert]', error);
-        });
+      pool.query(
+        `INSERT INTO prompt_logs (player_id, stage_number, prompt_text, ai_response, is_successful, is_blocked_by_anticheat)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [user.id, stageNumber, userMessage, PROFANITY_REFUSAL_MESSAGE, false, true],
+      ).catch((err) => console.error('[prompt_logs profanity insert]', err));
+
       return res.json({
         response: PROFANITY_REFUSAL_MESSAGE,
         status: 'blocked',
@@ -110,19 +101,11 @@ export const chatPrompt = async (req: Request, res: Response) => {
         const copyPasteCheck = await isPromptCopyPaste(stageNumber, userMessage);
 
         if (copyPasteCheck.blocked) {
-          supabase
-            .from('prompt_logs')
-            .insert({
-              player_id: user.id,
-              stage_number: stageNumber,
-              prompt_text: userMessage,
-              ai_response: copyPasteCheck.message,
-              is_successful: false,
-              is_blocked_by_anticheat: true,
-            })
-            .then(({ error }) => {
-              if (error) console.error('[prompt_logs anticheat insert]', error);
-            });
+          pool.query(
+            `INSERT INTO prompt_logs (player_id, stage_number, prompt_text, ai_response, is_successful, is_blocked_by_anticheat)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [user.id, stageNumber, userMessage, copyPasteCheck.message, false, true],
+          ).catch((err) => console.error('[prompt_logs anticheat insert]', err));
 
           return res.json({ response: copyPasteCheck.message });
         }

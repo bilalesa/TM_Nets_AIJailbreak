@@ -2,9 +2,11 @@ import { Queue, QueueEvents, type JobsOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const isTLS = redisUrl.startsWith('rediss://');
 const connection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: true,
+  ...(isTLS ? { tls: { rejectUnauthorized: false } } : {}),
 });
 
 const queueName = process.env.LLM_QUEUE_NAME || 'llm-queue';

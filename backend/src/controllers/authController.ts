@@ -3,7 +3,7 @@
 
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { supabase } from '../config/supabase.js';
+import { pool } from '../config/supabase.js';
 import {
   generateRecoveryCode,
   hashRecoveryCode,
@@ -48,15 +48,12 @@ export const startSession = async (req: Request, res: Response) => {
     );
     const registrationIp = extractClientIp(req);
 
-    // Username must be free — there is no longer a "same email re-login"
-    // path on this endpoint. Players who want to re-login must hit
-    const { data: usernameTaken, error: usernameError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('username', username)
-      .maybeSingle();
-    if (usernameError) throw usernameError;
-    if (usernameTaken) {
+    // Username must be free — players who want to re-login must use recovery code.
+    const usernameTakenResult = await pool.query(
+      'SELECT id FROM players WHERE username = $1 LIMIT 1',
+      [username],
+    );
+    if (usernameTakenResult.rows.length > 0) {
       return res.status(409).json({
         error:
           'That username is already taken. If this is your account, use the recovery code you saved at signup.',
@@ -66,18 +63,13 @@ export const startSession = async (req: Request, res: Response) => {
     const recoveryCode = generateRecoveryCode();
     const recoveryCodeHash = hashRecoveryCode(recoveryCode);
 
-    const { data: inserted, error: insertError } = await supabase
-      .from('players')
-      .insert({
-        username,
-        session_active: true,
-        registration_ip: registrationIp,
-        client_fingerprint: fingerprint,
-        recovery_code_hash: recoveryCodeHash,
-      })
-      .select('id, username')
-      .single();
-    if (insertError) throw insertError;
+    const insertResult = await pool.query(
+      `INSERT INTO players (username, session_active, registration_ip, client_fingerprint, recovery_code_hash)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, username`,
+      [username, true, registrationIp, fingerprint, recoveryCodeHash],
+    );
+    const inserted = insertResult.rows[0];
 
     const token = signJwt(inserted.id, inserted.username);
 
@@ -114,12 +106,11 @@ export const recoverSession = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Recovery code is required' });
     }
 
-    const { data: player, error: lookupError } = await supabase
-      .from('players')
-      .select('id, username, is_banned, banned_reason, recovery_code_hash')
-      .eq('username', username)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
+    const playerResult = await pool.query(
+      'SELECT id, username, is_banned, banned_reason, recovery_code_hash FROM players WHERE username = $1 LIMIT 1',
+      [username],
+    );
+    const player = playerResult.rows[0] ?? null;
 
     // Generic error message regardless of which branch fails — don't leak
     // which usernames exist in the database.
@@ -140,15 +131,12 @@ export const recoverSession = async (req: Request, res: Response) => {
       });
     }
 
-    const { error: refreshError } = await supabase
-      .from('players')
-      .update({
-        session_active: true,
-        last_active_at: new Date().toISOString(),
-        client_fingerprint: fingerprint,
-      })
-      .eq('id', player.id);
-    if (refreshError) throw refreshError;
+    await pool.query(
+      `UPDATE players
+       SET session_active = $1, last_active_at = $2, client_fingerprint = $3
+       WHERE id = $4`,
+      [true, new Date().toISOString(), fingerprint, player.id],
+    );
 
     const token = signJwt(player.id, player.username);
     return res.json({ token, username: player.username });
