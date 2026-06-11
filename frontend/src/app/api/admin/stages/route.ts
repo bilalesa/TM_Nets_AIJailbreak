@@ -1,24 +1,26 @@
+// frontend/src/app/api/admin/stages/route.ts
+// Thin proxy: GET /api/admin/stages
+
 import { NextResponse } from 'next/server';
-import { AdminAuthError, requireAdmin } from '@/lib/adminAuth';
-import { pool } from '@/lib/db';
+import { cookies } from 'next/headers';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 export async function GET() {
   try {
-    await requireAdmin();
-
-    const result = await pool.query(
-      `SELECT id, stage_number, name, subtitle, base_xp, secret_code, system_prompt,
-              opening_message, is_active, updated_at, updated_by
-       FROM stage_configs
-       ORDER BY stage_number ASC`,
-    );
-
-    return NextResponse.json({ stages: result.rows });
-  } catch (err) {
-    if (err instanceof AdminAuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+    const adminToken = (await cookies()).get('admin_session_token')?.value;
+    if (!adminToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.error('[admin/stages GET]', err);
+
+    const res = await fetch(`${getBackendBaseUrl()}/api/admin/stages`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      cache: 'no-store',
+    });
+
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err) {
+    console.error('[/api/admin/stages proxy]', err);
     return NextResponse.json({ error: 'Failed to load stages' }, { status: 500 });
   }
 }

@@ -1,10 +1,9 @@
 // frontend/src/lib/adminAuth.ts
-// Admin authentication: bcrypt password verification, JWT issuance, session management via httpOnly cookies, and role-based access control.
+// Admin session management via httpOnly cookies.
+// requireAdmin() verifies the JWT locally — DB re-validation is handled by the backend middleware.
 
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { pool } from './db';
 
 export const ADMIN_COOKIE_NAME = 'admin_session_token';
 const ADMIN_TOKEN_TTL_SECONDS = 60 * 60 * 8; // 8h
@@ -22,18 +21,6 @@ function getJwtSecret(): string {
   const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
   if (!secret) throw new Error('Missing ADMIN_JWT_SECRET / JWT_SECRET');
   return secret;
-}
-
-export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, 10);
-}
-
-export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(plain, hash);
-}
-
-export function signAdminToken(claims: AdminClaims): string {
-  return jwt.sign(claims, getJwtSecret(), { expiresIn: ADMIN_TOKEN_TTL_SECONDS });
 }
 
 export async function setAdminCookie(token: string): Promise<void> {
@@ -74,19 +61,15 @@ export async function getAdminFromCookie(): Promise<AdminClaims | null> {
   }
 }
 
+/**
+ * Verifies the admin cookie JWT locally.
+ * DB re-validation (is_active check) is delegated to the backend adminAuthMiddleware
+ * on each proxied request, so no DB call is needed here.
+ */
 export async function requireAdmin(): Promise<AdminClaims> {
   const admin = await getAdminFromCookie();
   if (!admin) {
     throw new AdminAuthError('Unauthorized', 401);
-  }
-  // Re-validate against DB to catch deactivated/banned admins on every request.
-  const result = await pool.query(
-    'SELECT id, is_active FROM admin_users WHERE id = $1 LIMIT 1',
-    [admin.id],
-  );
-  const row = result.rows[0];
-  if (!row || !row.is_active) {
-    throw new AdminAuthError('Admin disabled or not found', 401);
   }
   return admin;
 }
@@ -111,28 +94,6 @@ export interface AuditEntry {
   targetId?: string | null;
   details?: Record<string, unknown> | null;
   ipAddress?: string | null;
-}
-
-export async function writeAudit(
-  admin: AdminClaims,
-  entry: AuditEntry,
-): Promise<void> {
-  try {
-    await pool.query(
-      `INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        admin.id,
-        entry.action,
-        entry.targetType ?? null,
-        entry.targetId ?? null,
-        entry.details ? JSON.stringify(entry.details) : null,
-        entry.ipAddress ?? null,
-      ],
-    );
-  } catch (err) {
-    console.error('[admin_audit_log insert]', err);
-  }
 }
 
 export function extractClientIp(headers: Headers): string | null {

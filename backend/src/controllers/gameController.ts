@@ -229,3 +229,72 @@ export const getChatQueueHealth = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Failed to get queue health.' });
   }
 };
+
+function formatLeaderboardTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(' : ');
+}
+
+export const getPublicLeaderboard = async (_req: Request, res: Response) => {
+  try {
+    const playersRes = await pool.query(
+      `SELECT id, username, total_score
+       FROM players
+       WHERE session_active = true AND is_banned = false
+       ORDER BY total_score DESC`,
+    );
+
+    const players = playersRes.rows;
+
+    if (!players || players.length === 0) {
+      return res.json({ leaderboard: [], totalPlayers: 0, allPlayers: [] });
+    }
+
+    const playerIds = players.map((p) => p.id);
+
+    const completionsRes = await pool.query(
+      `SELECT player_id, time_taken_seconds
+       FROM stage_completions
+       WHERE player_id = ANY($1)`,
+      [playerIds],
+    );
+
+    const completionMap = new Map<string, { stagesPassed: number; totalSeconds: number }>();
+    for (const c of completionsRes.rows) {
+      const existing = completionMap.get(c.player_id) ?? { stagesPassed: 0, totalSeconds: 0 };
+      completionMap.set(c.player_id, {
+        stagesPassed: existing.stagesPassed + 1,
+        totalSeconds: existing.totalSeconds + Number(c.time_taken_seconds),
+      });
+    }
+
+    const ranked = players
+      .map((p) => {
+        const agg = completionMap.get(p.id) ?? { stagesPassed: 0, totalSeconds: 0 };
+        return {
+          id: p.id,
+          username: p.username,
+          totalScore: Number(p.total_score),
+          stagesPassed: agg.stagesPassed,
+          totalSeconds: agg.totalSeconds,
+          totalTimeFormatted: formatLeaderboardTime(agg.totalSeconds),
+        };
+      })
+      .sort((a, b) => {
+        if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+        return a.totalSeconds - b.totalSeconds;
+      })
+      .map((p, i) => ({ ...p, rank: i + 1 }));
+
+    return res.json({
+      leaderboard: ranked.slice(0, 10),
+      totalPlayers: ranked.length,
+      allPlayers: ranked,
+    });
+  } catch (error: unknown) {
+    console.error('[getPublicLeaderboard]', error);
+    return res.status(500).json({ error: 'Failed to load leaderboard' });
+  }
+};

@@ -1,16 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { clearAdminCookie, extractClientIp, getAdminFromCookie, writeAudit } from '@/lib/adminAuth';
+// frontend/src/app/api/admin/logout/route.ts
+// Clears the admin session cookie. DB audit is handled by the backend on each proxied action.
 
-export async function POST(request: NextRequest) {
-  const admin = await getAdminFromCookie();
+import { NextResponse } from 'next/server';
+import { clearAdminCookie } from '@/lib/adminAuth';
+
+export async function POST() {
   await clearAdminCookie();
-  if (admin) {
-    await writeAudit(admin, {
-      action: 'admin_logout',
-      targetType: 'admin_user',
-      targetId: admin.id,
-      ipAddress: extractClientIp(request.headers),
-    });
-  }
   return NextResponse.json({ success: true });
 }

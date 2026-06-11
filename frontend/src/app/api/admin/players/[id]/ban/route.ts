@@ -1,11 +1,9 @@
+// frontend/src/app/api/admin/players/[id]/ban/route.ts
+// Thin proxy: POST /api/admin/players/:id/ban
+
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  AdminAuthError,
-  extractClientIp,
-  requireAdmin,
-  writeAudit,
-} from '@/lib/adminAuth';
-import { pool } from '@/lib/db';
+import { cookies } from 'next/headers';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -13,35 +11,28 @@ interface RouteContext {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const admin = await requireAdmin();
+    const adminToken = (await cookies()).get('admin_session_token')?.value;
+    if (!adminToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
-    const { reason } = (await request.json().catch(() => ({}))) as { reason?: unknown };
-    const banReason = typeof reason === 'string' && reason.trim() ? reason.trim() : 'No reason provided';
+    const body = await request.json().catch(() => ({}));
 
-    const result = await pool.query(
-      `UPDATE players SET is_banned = true, banned_reason = $1
-       WHERE id = $2
-       RETURNING id, username`,
-      [banReason, id],
-    );
-
-    const data = result.rows[0] ?? null;
-    if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
-
-    await writeAudit(admin, {
-      action: 'ban_player',
-      targetType: 'player',
-      targetId: id,
-      details: { reason: banReason, username: data.username },
-      ipAddress: extractClientIp(request.headers),
+    const res = await fetch(`${getBackendBaseUrl()}/api/admin/players/${id}/ban`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
     });
 
-    return NextResponse.json({ success: true });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    if (err instanceof AdminAuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    console.error('[admin/players/:id/ban]', err);
+    console.error('[/api/admin/players/:id/ban proxy]', err);
     return NextResponse.json({ error: 'Failed to ban player' }, { status: 500 });
   }
 }

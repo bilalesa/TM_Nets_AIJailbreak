@@ -1,54 +1,26 @@
+// frontend/src/app/api/admin/stats/route.ts
+// Thin proxy: GET /api/admin/stats
+
 import { NextResponse } from 'next/server';
-import { AdminAuthError, requireAdmin } from '@/lib/adminAuth';
-import { pool } from '@/lib/db';
+import { cookies } from 'next/headers';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 export async function GET() {
   try {
-    await requireAdmin();
-
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-    const [
-      playersTotalRes,
-      playersBannedRes,
-      playersRecentRes,
-      completionsTotalRes,
-      promptsTotalRes,
-      stageBreakdownRes,
-    ] = await Promise.all([
-      pool.query('SELECT COUNT(*) AS count FROM players'),
-      pool.query('SELECT COUNT(*) AS count FROM players WHERE is_banned = true'),
-      pool.query('SELECT COUNT(*) AS count FROM players WHERE created_at >= $1', [since24h]),
-      pool.query('SELECT COUNT(*) AS count FROM stage_completions'),
-      pool.query('SELECT COUNT(*) AS count FROM prompt_logs WHERE created_at >= $1', [since24h]),
-      pool.query('SELECT stage_number FROM stage_completions'),
-    ]);
-
-    const counts: Record<number, number> = {};
-    for (const row of stageBreakdownRes.rows) {
-      const n = Number(row.stage_number);
-      counts[n] = (counts[n] ?? 0) + 1;
+    const adminToken = (await cookies()).get('admin_session_token')?.value;
+    if (!adminToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    return NextResponse.json({
-      players: {
-        total: parseInt(playersTotalRes.rows[0]?.count ?? '0', 10),
-        banned: parseInt(playersBannedRes.rows[0]?.count ?? '0', 10),
-        joinedLast24h: parseInt(playersRecentRes.rows[0]?.count ?? '0', 10),
-      },
-      completions: {
-        total: parseInt(completionsTotalRes.rows[0]?.count ?? '0', 10),
-        byStage: counts,
-      },
-      activity: {
-        promptsLast24h: parseInt(promptsTotalRes.rows[0]?.count ?? '0', 10),
-      },
+    const res = await fetch(`${getBackendBaseUrl()}/api/admin/stats`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      cache: 'no-store',
     });
+
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    if (err instanceof AdminAuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    console.error('[admin/stats]', err);
+    console.error('[/api/admin/stats proxy]', err);
     return NextResponse.json({ error: 'Failed to load stats' }, { status: 500 });
   }
 }

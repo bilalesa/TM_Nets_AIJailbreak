@@ -7,6 +7,7 @@ import type { NextFunction, Request, Response } from 'express';
 import authRoutes from './routes/authRoutes.js';
 import playerRoutes from './routes/playerRoutes.js';
 import gameRoutes from './routes/gameRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 dotenv.config();
 
@@ -90,6 +91,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/games', gameplayLimiter, gameRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
 	if (error instanceof Error && error.message === 'Not allowed by CORS') {

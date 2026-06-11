@@ -1,11 +1,9 @@
+// frontend/src/app/api/admin/players/[id]/unban/route.ts
+// Thin proxy: POST /api/admin/players/:id/unban
+
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  AdminAuthError,
-  extractClientIp,
-  requireAdmin,
-  writeAudit,
-} from '@/lib/adminAuth';
-import { pool } from '@/lib/db';
+import { cookies } from 'next/headers';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -13,33 +11,23 @@ interface RouteContext {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const admin = await requireAdmin();
+    const adminToken = (await cookies()).get('admin_session_token')?.value;
+    if (!adminToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
 
-    const result = await pool.query(
-      `UPDATE players SET is_banned = false, banned_reason = NULL
-       WHERE id = $1
-       RETURNING id, username`,
-      [id],
-    );
-
-    const data = result.rows[0] ?? null;
-    if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
-
-    await writeAudit(admin, {
-      action: 'unban_player',
-      targetType: 'player',
-      targetId: id,
-      details: { username: data.username },
-      ipAddress: extractClientIp(request.headers),
+    const res = await fetch(`${getBackendBaseUrl()}/api/admin/players/${id}/unban`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      cache: 'no-store',
     });
 
-    return NextResponse.json({ success: true });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    if (err instanceof AdminAuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    console.error('[admin/players/:id/unban]', err);
+    console.error('[/api/admin/players/:id/unban proxy]', err);
     return NextResponse.json({ error: 'Failed to unban player' }, { status: 500 });
   }
 }

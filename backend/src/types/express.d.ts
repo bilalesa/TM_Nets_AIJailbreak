@@ -1,3 +1,5 @@
+import type { AdminClaims } from '../middlewares/adminAuthMiddleware.js';
+
 declare global {
   namespace Express {
     interface Request {
@@ -5,6 +7,7 @@ declare global {
         id: string;
         username: string;
       };
+      admin?: AdminClaims;
     }
   }
 }

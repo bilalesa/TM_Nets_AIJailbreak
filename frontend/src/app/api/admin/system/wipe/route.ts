@@ -1,49 +1,27 @@
 // frontend/src/app/api/admin/system/wipe/route.ts
+// Thin proxy: POST /api/admin/system/wipe
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  AdminAuthError,
-  extractClientIp,
-  requireAdmin,
-  requireRole,
-  writeAudit,
-} from '@/lib/adminAuth';
-import { pool } from '@/lib/db';
+import { cookies } from 'next/headers';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
-    const admin = await requireAdmin();
-    requireRole(admin, ['super_admin']);
+    const adminToken = (await cookies()).get('admin_session_token')?.value;
+    if (!adminToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    await pool.query('BEGIN');
-    await pool.query('DELETE FROM cracked_prompts');
-    await pool.query('DELETE FROM prompt_logs');
-    await pool.query('DELETE FROM stage_completions');
-    await pool.query('DELETE FROM players');
-    await pool.query('COMMIT');
-
-    const data = { wiped: true };
-
-    await writeAudit(admin, {
-      action: 'daily_wipe',
-      targetType: 'system',
-      targetId: null,
-      details: data,
-      ipAddress: extractClientIp(request.headers),
+    const res = await fetch(`${getBackendBaseUrl()}/api/admin/system/wipe`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      cache: 'no-store',
     });
 
-    return NextResponse.json({ result: data });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    // Attempt rollback on error
-    try {
-      await pool.query('ROLLBACK');
-    } catch {
-      // ignore rollback errors
-    }
-    if (err instanceof AdminAuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    console.error('[admin/system/wipe POST]', err);
-    return NextResponse.json({ error: 'Failed to perform daily wipe' }, { status: 500 });
+    console.error('[/api/admin/system/wipe proxy]', err);
+    return NextResponse.json({ error: 'Failed to perform wipe' }, { status: 500 });
   }
 }
