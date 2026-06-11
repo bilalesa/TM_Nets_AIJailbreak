@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { pool } from '@/lib/db';
 import WipeButton from './WipeButton';
 
 export const dynamic = 'force-dynamic';
@@ -25,24 +25,20 @@ export default async function SystemPage() {
 
   let lastWipe: LastWipe | null = null;
   if (isSuperAdmin) {
-    const supabase = getSupabaseServerClient();
-    const { data } = await supabase
-      .from('admin_audit_log')
-      .select('created_at, details, admin_users(email)')
-      .eq('action', 'daily_wipe')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data) {
-      // Supabase returns the joined row as either an object or array
-      // depending on whether the FK is single-valued. Normalise.
-      const joined = (data as { admin_users?: { email: string } | { email: string }[] | null })
-        .admin_users;
-      const email = Array.isArray(joined) ? joined[0]?.email ?? null : joined?.email ?? null;
+    const result = await pool.query(
+      `SELECT a.created_at, a.details, au.email AS admin_email
+       FROM admin_audit_log a
+       LEFT JOIN admin_users au ON a.admin_id = au.id
+       WHERE a.action = 'daily_wipe'
+       ORDER BY a.created_at DESC
+       LIMIT 1`,
+    );
+    const row = result.rows[0] ?? null;
+    if (row) {
       lastWipe = {
-        created_at: data.created_at as string,
-        details: (data.details ?? null) as Record<string, unknown> | null,
-        admin_email: email,
+        created_at: row.created_at as string,
+        details: (row.details ?? null) as Record<string, unknown> | null,
+        admin_email: (row.admin_email as string | null) ?? null,
       };
     }
   }

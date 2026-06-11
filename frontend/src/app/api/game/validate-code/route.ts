@@ -1,16 +1,28 @@
 // frontend/src/app/api/game/validate-code/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { SERVER_STAGE_CONFIGS } from '@/lib/stageConfig';
 import { deriveUserStageCode } from '@/lib/stageCode';
 import { computeTimeBonus } from '@/lib/avatar';
 import { hashPrompt } from '@/lib/promptHash';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { pool } from '@/lib/db';
 import { getPlayerFromCookie } from '@/lib/playerSession';
 
-const supabase = getSupabaseServerClient();
+// Create a fresh Supabase client for Realtime broadcasts only (no DB access).
+function getRealtimeClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+}
 
-async function broadcastScoreUpdated(payload: { playerId: string; stageNumber: number; scoreAwarded: number }) {
+async function broadcastScoreUpdated(payload: {
+  playerId: string;
+  stageNumber: number;
+  scoreAwarded: number;
+}) {
+  const supabase = getRealtimeClient();
   const channel = supabase.channel('leaderboard-updates');
   const safePayload = {
     playerId: payload.playerId,
@@ -36,7 +48,7 @@ async function broadcastScoreUpdated(payload: { playerId: string; stageNumber: n
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth — validates JWT AND confirms player still exists
-    const session = await getPlayerFromCookie(supabase);
+    const session = await getPlayerFromCookie();
     if (!session.ok) return session.response;
     const { player } = session;
 
@@ -61,12 +73,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Prevent double-submission
-    const { data: existing } = await supabase
-      .from('stage_completions')
-      .select('id, score_awarded')
-      .eq('player_id', player.id)
-      .eq('stage_number', parsedStageNumber)
-      .maybeSingle();
+    const existingRes = await pool.query(
+      `SELECT id, score_awarded FROM stage_completions
+       WHERE player_id = $1 AND stage_number = $2
+       LIMIT 1`,
+      [player.id, parsedStageNumber],
+    );
+    const existing = existingRes.rows[0] ?? null;
 
     if (existing) {
       return NextResponse.json({
@@ -85,32 +98,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ correct: false });
     }
 
-    // 4b. Audit signal: snapshot the player's current fingerprint so we can
-    // freeze it onto the completion row at insert time (step 7). We do NOT
-    const { data: requestingPlayer, error: requestingPlayerError } = await supabase
-      .from('players')
-      .select('client_fingerprint')
-      .eq('id', player.id)
-      .maybeSingle();
-    if (requestingPlayerError) throw requestingPlayerError;
-
-    const requestingFingerprint = requestingPlayer?.client_fingerprint ?? null;
+    // 4b. Snapshot the player's current fingerprint for audit
+    const requestingPlayerRes = await pool.query(
+      'SELECT client_fingerprint FROM players WHERE id = $1 LIMIT 1',
+      [player.id],
+    );
+    if (requestingPlayerRes.rowCount === 0) {
+      throw new Error('Player not found when fetching fingerprint');
+    }
+    const requestingFingerprint = requestingPlayerRes.rows[0]?.client_fingerprint ?? null;
 
     // 5. Derive started_at from MIN(prompt_logs.created_at) for this player+stage.
-    //    submitted_at is "now". time_taken_seconds is computed server-side so the
     const submittedAt = new Date();
-    const { data: firstPrompt, error: firstPromptError } = await supabase
-      .from('prompt_logs')
-      .select('created_at')
-      .eq('player_id', player.id)
-      .eq('stage_number', parsedStageNumber)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    const firstPromptRes = await pool.query(
+      `SELECT created_at FROM prompt_logs
+       WHERE player_id = $1 AND stage_number = $2
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [player.id, parsedStageNumber],
+    );
+    const firstPromptRow = firstPromptRes.rows[0] ?? null;
 
-    if (firstPromptError) throw firstPromptError;
-
-    const startedAt = firstPrompt?.created_at ? new Date(firstPrompt.created_at) : submittedAt;
+    const startedAt = firstPromptRow?.created_at ? new Date(firstPromptRow.created_at) : submittedAt;
     const timeTakenSeconds = Math.max(
       0,
       Math.floor((submittedAt.getTime() - startedAt.getTime()) / 1000),
@@ -121,56 +130,41 @@ export async function POST(request: NextRequest) {
     const grossScore = stageConfig.baseXP + timeBonus;
     const scoreAwarded = grossScore;
 
-    // 7. Record completion. client_fingerprint is snapshotted at win time so
-    // admins can spot multi-account abuse
-    const { error: completionError } = await supabase
-      .from('stage_completions')
-      .insert({
-        player_id: player.id,
-        stage_number: parsedStageNumber,
-        score_awarded: scoreAwarded,
-        time_taken_seconds: timeTakenSeconds,
-        started_at: startedAt.toISOString(),
-        submitted_at: submittedAt.toISOString(),
-        client_fingerprint: requestingFingerprint,
-      });
-
-    if (completionError) throw completionError;
+    // 7. Record completion
+    await pool.query(
+      `INSERT INTO stage_completions
+         (player_id, stage_number, score_awarded, time_taken_seconds, started_at, submitted_at, client_fingerprint)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        player.id,
+        parsedStageNumber,
+        scoreAwarded,
+        timeTakenSeconds,
+        startedAt.toISOString(),
+        submittedAt.toISOString(),
+        requestingFingerprint,
+      ],
+    );
 
     // 8. Update total_score on the player row (increment)
-    const { error: scoreError } = await supabase.rpc('increment_player_score', {
-      p_player_id: player.id,
-      p_amount: scoreAwarded,
-    });
-
-    if (scoreError) {
-      const { data: playerRow } = await supabase
-        .from('players')
-        .select('total_score')
-        .eq('id', player.id)
-        .maybeSingle();
-
-      await supabase
-        .from('players')
-        .update({ total_score: (playerRow?.total_score ?? 0) + scoreAwarded })
-        .eq('id', player.id);
-    }
+    await pool.query(
+      `UPDATE players SET total_score = COALESCE(total_score, 0) + $2 WHERE id = $1`,
+      [player.id, scoreAwarded],
+    );
 
     // 10. Anti-cheat: save the actual cracking prompt for copy-paste detection.
-    // We pull the row that the LLM worker flagged as is_successful
     (async () => {
       try {
-        const { data: winningPromptRow } = await supabase
-          .from('prompt_logs')
-          .select('prompt_text')
-          .eq('player_id', player.id)
-          .eq('stage_number', parsedStageNumber)
-          .eq('is_successful', true)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
+        const winningPromptRes = await pool.query(
+          `SELECT prompt_text FROM prompt_logs
+           WHERE player_id = $1 AND stage_number = $2 AND is_successful = true
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [player.id, parsedStageNumber],
+        );
+        const winningPromptRow = winningPromptRes.rows[0] ?? null;
         const winningPrompt = winningPromptRow?.prompt_text?.trim();
+
         if (!winningPrompt) {
           console.warn(
             `[validate-code] No is_successful prompt found for player=${player.id} stage=${parsedStageNumber}; skipping anti-cheat save.`,
@@ -184,18 +178,11 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        const { error: insertError } = await supabase
-          .from('cracked_prompts')
-          .insert({
-            player_id: player.id,
-            stage_number: parsedStageNumber,
-            prompt_text: winningPrompt,
-            text_hash: textHash,
-          });
-
-        if (insertError) {
-          console.error('[validate-code] Failed to save cracked prompt:', insertError.message);
-        }
+        await pool.query(
+          `INSERT INTO cracked_prompts (player_id, stage_number, prompt_text, text_hash)
+           VALUES ($1, $2, $3, $4)`,
+          [player.id, parsedStageNumber, winningPrompt, textHash],
+        );
       } catch (err) {
         // Non-fatal — don't let the anti-cheat save block the win.
         console.error('[validate-code] Failed to save winning prompt hash:', err);
@@ -203,7 +190,6 @@ export async function POST(request: NextRequest) {
     })();
 
     // 11. Broadcast score_updated event to Supabase Realtime
-    // This notifies all leaderboard subscribers to re-fetch — zero polling needed.
     broadcastScoreUpdated({ playerId: player.id, stageNumber: parsedStageNumber, scoreAwarded })
       .then(() => {})
       .catch((err: unknown) => console.warn('[broadcast score_updated]', err));

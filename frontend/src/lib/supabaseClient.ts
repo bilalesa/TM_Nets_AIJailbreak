@@ -19,10 +19,3 @@ export function getSupabaseBrowserClient(): SupabaseClient {
   browserClient = createClient(url, anonKey);
   return browserClient;
 }
-
-export function getSupabaseServerClient(): SupabaseClient {
-  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY', process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-  return createClient(url, serviceRoleKey);
-}

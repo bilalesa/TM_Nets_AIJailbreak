@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { pool } from '@/lib/db';
 import {
   extractClientIp,
   setAdminCookie,
@@ -8,8 +8,6 @@ import {
   writeAudit,
   type AdminRole,
 } from '@/lib/adminAuth';
-
-const supabase = getSupabaseServerClient();
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,16 +20,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const { data: admin, error } = await supabase
-      .from('admin_users')
-      .select('id, email, password_hash, name, role, is_active')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle();
+    const result = await pool.query(
+      `SELECT id, email, password_hash, name, role, is_active
+       FROM admin_users
+       WHERE email = $1
+       LIMIT 1`,
+      [email.trim().toLowerCase()],
+    );
 
-    if (error) {
-      console.error('[admin/login] supabase', error);
-      return NextResponse.json({ error: 'Login failed' }, { status: 500 });
-    }
+    const admin = result.rows[0] ?? null;
 
     if (!admin || !admin.is_active) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
@@ -51,18 +48,17 @@ export async function POST(request: NextRequest) {
     const token = signAdminToken(claims);
     await setAdminCookie(token);
 
-    await supabase.from('admin_users').update({ last_login_at: new Date().toISOString() }).eq('id', admin.id);
-
-    await writeAudit(
-      claims,
-      {
-        action: 'admin_login',
-        targetType: 'admin_user',
-        targetId: admin.id as string,
-        ipAddress: extractClientIp(request.headers),
-      },
-      supabase,
+    await pool.query(
+      'UPDATE admin_users SET last_login_at = $1 WHERE id = $2',
+      [new Date().toISOString(), admin.id],
     );
+
+    await writeAudit(claims, {
+      action: 'admin_login',
+      targetType: 'admin_user',
+      targetId: admin.id as string,
+      ipAddress: extractClientIp(request.headers),
+    });
 
     return NextResponse.json({
       success: true,

@@ -1,10 +1,8 @@
 // frontend/src/app/api/game/stage-history/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { pool } from '@/lib/db';
 import { getPlayerFromCookie } from '@/lib/playerSession';
-
-const supabase = getSupabaseServerClient();
 
 interface HistoryMessage {
   id: string;
@@ -15,7 +13,7 @@ interface HistoryMessage {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getPlayerFromCookie(supabase);
+    const session = await getPlayerFromCookie();
     if (!session.ok) return session.response;
     const { player } = session;
 
@@ -25,17 +23,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from('prompt_logs')
-      .select('id, prompt_text, ai_response, created_at')
-      .eq('player_id', player.id)
-      .eq('stage_number', stageNumber)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
+    const result = await pool.query(
+      `SELECT id, prompt_text, ai_response, created_at
+       FROM prompt_logs
+       WHERE player_id = $1 AND stage_number = $2
+       ORDER BY created_at ASC`,
+      [player.id, stageNumber],
+    );
 
     const messages: HistoryMessage[] = [];
-    for (const row of data ?? []) {
+    for (const row of result.rows) {
       const ts = new Date(row.created_at as string).getTime();
       messages.push({
         id: `pl-${row.id}-u`,

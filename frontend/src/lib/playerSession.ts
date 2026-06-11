@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { pool } from './db';
 
 export const GAME_COOKIE_NAME = 'game_session_token';
 
@@ -22,9 +22,7 @@ function clearedSessionResponse(message: string, code: string): NextResponse {
   return res;
 }
 
-export async function getPlayerFromCookie(
-  supabase: SupabaseClient,
-): Promise<PlayerSessionResult> {
+export async function getPlayerFromCookie(): Promise<PlayerSessionResult> {
   const cookieStore = await cookies();
   const token = cookieStore.get(GAME_COOKIE_NAME)?.value;
   if (!token) {
@@ -41,21 +39,20 @@ export async function getPlayerFromCookie(
     return { ok: false, response: clearedSessionResponse('Invalid session', 'INVALID_SESSION') };
   }
 
-  // Confirm the player still exists. 
-  const { data, error } = await supabase
-    .from('players')
-    .select('id')
-    .eq('id', decoded.id)
-    .maybeSingle();
-
-  if (error) {
-    console.error('[getPlayerFromCookie] player lookup failed', error);
+  // Confirm the player still exists.
+  let exists = false;
+  try {
+    const result = await pool.query('SELECT id FROM players WHERE id = $1 LIMIT 1', [decoded.id]);
+    exists = result.rowCount !== null && result.rowCount > 0;
+  } catch (err) {
+    console.error('[getPlayerFromCookie] player lookup failed', err);
     return {
       ok: false,
       response: NextResponse.json({ error: 'Failed to validate session' }, { status: 500 }),
     };
   }
-  if (!data) {
+
+  if (!exists) {
     return { ok: false, response: clearedSessionResponse('Session expired', 'PLAYER_GONE') };
   }
 

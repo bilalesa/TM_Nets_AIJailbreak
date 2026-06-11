@@ -6,9 +6,7 @@ import {
   requireRole,
   writeAudit,
 } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
-
-const supabase = getSupabaseServerClient();
+import { pool } from '@/lib/db';
 
 interface RouteContext {
   params: Promise<{ number: string }>;
@@ -35,13 +33,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Invalid stage number' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from('stage_configs')
-      .select('*')
-      .eq('stage_number', stageNumber)
-      .maybeSingle();
+    const result = await pool.query(
+      'SELECT * FROM stage_configs WHERE stage_number = $1 LIMIT 1',
+      [stageNumber],
+    );
 
-    if (error) throw error;
+    const data = result.rows[0] ?? null;
     if (!data) return NextResponse.json({ error: 'Stage not found' }, { status: 404 });
     return NextResponse.json({ stage: data });
   } catch (err) {
@@ -64,31 +61,42 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const body = (await request.json()) as Record<string, unknown>;
-    const update: Record<string, unknown> = {};
+    const updateFields: Record<string, unknown> = {};
     for (const key of ALLOWED_FIELDS) {
-      if (key in body) update[key] = body[key as AllowedField];
+      if (key in body) updateFields[key] = body[key as AllowedField];
     }
-    if (Object.keys(update).length === 0) {
+    if (Object.keys(updateFields).length === 0) {
       return NextResponse.json({ error: 'No allowed fields provided' }, { status: 400 });
     }
-    update.updated_by = admin.id;
-    update.updated_at = new Date().toISOString();
+    updateFields.updated_by = admin.id;
+    updateFields.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabase
-      .from('stage_configs')
-      .update(update)
-      .eq('stage_number', stageNumber)
-      .select('*')
-      .maybeSingle();
+    // Build dynamic SET clause
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    let p = 1;
+    for (const [col, val] of Object.entries(updateFields)) {
+      setClauses.push(`${col} = $${p++}`);
+      values.push(val);
+    }
+    values.push(stageNumber);
 
-    if (error) throw error;
+    const result = await pool.query(
+      `UPDATE stage_configs
+       SET ${setClauses.join(', ')}
+       WHERE stage_number = $${p}
+       RETURNING *`,
+      values,
+    );
+
+    const data = result.rows[0] ?? null;
     if (!data) return NextResponse.json({ error: 'Stage not found' }, { status: 404 });
 
     await writeAudit(admin, {
       action: 'update_stage',
       targetType: 'stage',
       targetId: String(stageNumber),
-      details: { fields: Object.keys(update) },
+      details: { fields: Object.keys(updateFields) },
       ipAddress: extractClientIp(request.headers),
     });
 

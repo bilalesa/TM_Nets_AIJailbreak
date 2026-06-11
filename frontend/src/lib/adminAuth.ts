@@ -4,8 +4,7 @@
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseServerClient } from './supabaseClient';
+import { pool } from './db';
 
 export const ADMIN_COOKIE_NAME = 'admin_session_token';
 const ADMIN_TOKEN_TTL_SECONDS = 60 * 60 * 8; // 8h
@@ -81,13 +80,12 @@ export async function requireAdmin(): Promise<AdminClaims> {
     throw new AdminAuthError('Unauthorized', 401);
   }
   // Re-validate against DB to catch deactivated/banned admins on every request.
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from('admin_users')
-    .select('id, is_active')
-    .eq('id', admin.id)
-    .maybeSingle();
-  if (error || !data || !data.is_active) {
+  const result = await pool.query(
+    'SELECT id, is_active FROM admin_users WHERE id = $1 LIMIT 1',
+    [admin.id],
+  );
+  const row = result.rows[0];
+  if (!row || !row.is_active) {
     throw new AdminAuthError('Admin disabled or not found', 401);
   }
   return admin;
@@ -118,18 +116,23 @@ export interface AuditEntry {
 export async function writeAudit(
   admin: AdminClaims,
   entry: AuditEntry,
-  supabase?: SupabaseClient,
 ): Promise<void> {
-  const client = supabase ?? getSupabaseServerClient();
-  const { error } = await client.from('admin_audit_log').insert({
-    admin_id: admin.id,
-    action: entry.action,
-    target_type: entry.targetType ?? null,
-    target_id: entry.targetId ?? null,
-    details: entry.details ?? null,
-    ip_address: entry.ipAddress ?? null,
-  });
-  if (error) console.error('[admin_audit_log insert]', error);
+  try {
+    await pool.query(
+      `INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        admin.id,
+        entry.action,
+        entry.targetType ?? null,
+        entry.targetId ?? null,
+        entry.details ? JSON.stringify(entry.details) : null,
+        entry.ipAddress ?? null,
+      ],
+    );
+  } catch (err) {
+    console.error('[admin_audit_log insert]', err);
+  }
 }
 
 export function extractClientIp(headers: Headers): string | null {

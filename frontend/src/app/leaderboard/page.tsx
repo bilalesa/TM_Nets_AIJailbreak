@@ -45,15 +45,6 @@ interface PlayerState {
   completedStages: number[];
 }
 
-// ── Utils ──────────────────────────────────────────────────────────────────────
-
-function formatTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(' : ');
-}
-
 // ── Rank decorators ────────────────────────────────────────────────────────────
 
 function RankBadge({ rank }: { rank: number }) {
@@ -105,7 +96,7 @@ export default function LeaderboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPlayer, setSidebarPlayer] = useState<PlayerState | null>(null);
 
-  // ── Initialize Supabase browser client ─────────────────────────────────────
+  // ── Initialize Supabase browser client (for Realtime only) ────────────────
   useEffect(() => {
     try {
       setSupabaseClient(getSupabaseBrowserClient());
@@ -154,78 +145,34 @@ export default function LeaderboardPage() {
     };
   }, [router]);
 
-  // ── Fetch leaderboard directly from Supabase ──────────────────────────────
+  // ── Fetch leaderboard from API ────────────────────────────────────────────
   const fetchLeaderboard = useCallback(
     async (silent = false) => {
-      if (!supabaseClient) return;
       if (!silent) setIsRefreshing(true);
       try {
-        const { data: players, error: playersError } = await supabaseClient
-          .from('players')
-          .select('id, username, total_score')
-          .eq('session_active', true)
-          .eq('is_banned', false)
-          .order('total_score', { ascending: false });
+        const res = await fetch('/api/game/leaderboard');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
 
-        if (playersError) throw playersError;
+        const allPlayers: Array<{
+          id: string;
+          username: string;
+          totalScore: number;
+          stagesPassed: number;
+          totalSeconds: number;
+          totalTimeFormatted: string;
+          rank: number;
+        }> = data.allPlayers ?? data.leaderboard ?? [];
 
-        if (!players || players.length === 0) {
-          setLeaderboard([]);
-          setCurrentPlayer(null);
-          setTotalPlayers(0);
-          return;
-        }
+        const top10 = allPlayers.slice(0, 10).map((p) => ({
+          ...p,
+          isCurrentPlayer: p.id === currentPlayerId,
+        }));
 
-        const playerIds = players.map((p) => p.id);
-        const { data: completions, error: completionsError } = await supabaseClient
-          .from('stage_completions')
-          .select('player_id, time_taken_seconds')
-          .in('player_id', playerIds);
+        setLeaderboard(top10);
+        setTotalPlayers(data.totalPlayers ?? 0);
 
-        if (completionsError) throw completionsError;
-
-        const completionMap = new Map<
-          string,
-          { stagesPassed: number; totalSeconds: number }
-        >();
-        for (const c of completions ?? []) {
-          const existing = completionMap.get(c.player_id) ?? {
-            stagesPassed: 0,
-            totalSeconds: 0,
-          };
-          completionMap.set(c.player_id, {
-            stagesPassed: existing.stagesPassed + 1,
-            totalSeconds: existing.totalSeconds + c.time_taken_seconds,
-          });
-        }
-
-        const ranked = players
-          .map((p) => {
-            const agg = completionMap.get(p.id) ?? {
-              stagesPassed: 0,
-              totalSeconds: 0,
-            };
-            return {
-              id: p.id,
-              username: p.username,
-              totalScore: p.total_score,
-              stagesPassed: agg.stagesPassed,
-              totalSeconds: agg.totalSeconds,
-              totalTimeFormatted: formatTime(agg.totalSeconds),
-              isCurrentPlayer: p.id === currentPlayerId,
-            };
-          })
-          .sort((a, b) => {
-            if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
-            return a.totalSeconds - b.totalSeconds;
-          })
-          .map((p, i) => ({ ...p, rank: i + 1 }));
-
-        // Show only top 10 in the leaderboard display, but keep total count
-        setLeaderboard(ranked.slice(0, 10));
-        setTotalPlayers(ranked.length);
-
-        const me = ranked.find((p) => p.isCurrentPlayer) ?? null;
+        const me = allPlayers.find((p) => p.id === currentPlayerId) ?? null;
         setCurrentPlayer(
           me
             ? {
@@ -245,14 +192,17 @@ export default function LeaderboardPage() {
         setIsRefreshing(false);
       }
     },
-    [supabaseClient, currentPlayerId],
+    [currentPlayerId],
   );
 
-  // ── Real-time subscription + initial fetch ────────────────────────────────
+  // ── Initial fetch (runs once currentPlayerId is available or on mount) ────
+  useEffect(() => {
+    fetchLeaderboard(false);
+  }, [fetchLeaderboard]);
+
+  // ── Real-time subscription (Supabase Realtime for live updates) ───────────
   useEffect(() => {
     if (!supabaseClient) return;
-
-    fetchLeaderboard(false);
 
     const channel = supabaseClient
       .channel('leaderboard-updates')
@@ -269,8 +219,8 @@ export default function LeaderboardPage() {
     };
   }, [fetchLeaderboard, supabaseClient]);
 
-  // ── Fallback if client not ready ──────────────────────────────────────────
-  if (!supabaseClient || loading) {
+  // ── Loading state ─────────────────────────────────────────────────────────
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#090C12] via-[#111522] to-[#1A0D10]">
         <div className="flex flex-col items-center gap-3">

@@ -1,24 +1,24 @@
-// Admin leaderboard: full ranking with signup metadata.
-// Includes banned players (so admins can audit) and ties broken by total time.
+// frontend/src/app/api/game/leaderboard/route.ts
+// GET /api/game/leaderboard
+// Returns top 10 leaderboard entries + total player count.
+// Only active (session_active = true), non-banned players are included.
 
 import { NextResponse } from 'next/server';
-import { AdminAuthError, requireAdmin } from '@/lib/adminAuth';
 import { pool } from '@/lib/db';
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
+  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(' : ');
 }
 
 export async function GET() {
   try {
-    await requireAdmin();
-
     const playersRes = await pool.query(
-      `SELECT id, username, total_score, is_banned, created_at
+      `SELECT id, username, total_score
        FROM players
+       WHERE session_active = true AND is_banned = false
        ORDER BY total_score DESC`,
     );
 
@@ -29,8 +29,9 @@ export async function GET() {
     }
 
     const playerIds = players.map((p) => p.id);
+
     const completionsRes = await pool.query(
-      `SELECT player_id, stage_number, time_taken_seconds
+      `SELECT player_id, time_taken_seconds
        FROM stage_completions
        WHERE player_id = ANY($1)`,
       [playerIds],
@@ -40,7 +41,6 @@ export async function GET() {
       string,
       { stagesPassed: number; totalSeconds: number }
     >();
-
     for (const c of completionsRes.rows) {
       const existing = completionMap.get(c.player_id) ?? {
         stagesPassed: 0,
@@ -62,8 +62,6 @@ export async function GET() {
           id: p.id,
           username: p.username,
           totalScore: Number(p.total_score),
-          isBanned: p.is_banned,
-          createdAt: p.created_at,
           stagesPassed: agg.stagesPassed,
           totalSeconds: agg.totalSeconds,
           totalTimeFormatted: formatTime(agg.totalSeconds),
@@ -76,14 +74,12 @@ export async function GET() {
       .map((p, i) => ({ ...p, rank: i + 1 }));
 
     return NextResponse.json({
-      leaderboard: ranked,
+      leaderboard: ranked.slice(0, 10),
       totalPlayers: ranked.length,
+      allPlayers: ranked, // included so the caller can find the current player's rank
     });
-  } catch (err) {
-    if (err instanceof AdminAuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    console.error('[admin/leaderboard GET]', err);
+  } catch (error: unknown) {
+    console.error('[/api/game/leaderboard]', error);
     return NextResponse.json({ error: 'Failed to load leaderboard' }, { status: 500 });
   }
 }

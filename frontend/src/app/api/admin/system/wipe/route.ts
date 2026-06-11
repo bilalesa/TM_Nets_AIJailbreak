@@ -8,28 +8,38 @@ import {
   requireRole,
   writeAudit,
 } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
-
-const supabase = getSupabaseServerClient();
+import { pool } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
     const admin = await requireAdmin();
     requireRole(admin, ['super_admin']);
 
-    const { data, error } = await supabase.rpc('daily_wipe');
-    if (error) throw error;
+    await pool.query('BEGIN');
+    await pool.query('DELETE FROM cracked_prompts');
+    await pool.query('DELETE FROM prompt_logs');
+    await pool.query('DELETE FROM stage_completions');
+    await pool.query('DELETE FROM players');
+    await pool.query('COMMIT');
+
+    const data = { wiped: true };
 
     await writeAudit(admin, {
       action: 'daily_wipe',
       targetType: 'system',
       targetId: null,
-      details: (data ?? null) as Record<string, unknown> | null,
+      details: data,
       ipAddress: extractClientIp(request.headers),
     });
 
     return NextResponse.json({ result: data });
   } catch (err) {
+    // Attempt rollback on error
+    try {
+      await pool.query('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
     if (err instanceof AdminAuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }

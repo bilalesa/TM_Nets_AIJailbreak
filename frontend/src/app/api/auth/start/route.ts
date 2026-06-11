@@ -2,12 +2,19 @@
 
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 import { getBackendBaseUrl } from '@/lib/backendUrl';
 
-const supabase = getSupabaseServerClient();
+// Supabase client used only for Realtime broadcasts — no DB access.
+function getRealtimeClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+}
 
 async function broadcastPlayerJoined(username: string) {
+  const supabase = getRealtimeClient();
   const channel = supabase.channel('leaderboard-updates');
   const safePayload = { username, sentAt: new Date().toISOString() };
 

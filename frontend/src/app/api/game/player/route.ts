@@ -2,44 +2,43 @@
 // Returns the current player's profile + which stages they've completed.
 
 import { NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { pool } from '@/lib/db';
 import { getPlayerFromCookie } from '@/lib/playerSession';
-
-const supabase = getSupabaseServerClient();
 
 export async function GET() {
   try {
-    const session = await getPlayerFromCookie(supabase);
+    const session = await getPlayerFromCookie();
     if (!session.ok) return session.response;
     const { player } = session;
 
     const [playerRes, completionsRes] = await Promise.all([
-      supabase
-        .from('players')
-        .select('id, username, total_score, created_at')
-        .eq('id', player.id)
-        .maybeSingle(),
-      supabase
-        .from('stage_completions')
-        .select('stage_number, score_awarded, time_taken_seconds, completed_at')
-        .eq('player_id', player.id)
-        .order('stage_number', { ascending: true }),
+      pool.query(
+        'SELECT id, username, total_score, created_at FROM players WHERE id = $1 LIMIT 1',
+        [player.id],
+      ),
+      pool.query(
+        `SELECT stage_number, score_awarded, time_taken_seconds, completed_at
+         FROM stage_completions
+         WHERE player_id = $1
+         ORDER BY stage_number ASC`,
+        [player.id],
+      ),
     ]);
 
-    if (playerRes.error) throw playerRes.error;
-    if (!playerRes.data) {
+    const playerRow = playerRes.rows[0] ?? null;
+    if (!playerRow) {
       return NextResponse.json(
         { error: 'Session expired', code: 'PLAYER_GONE' },
         { status: 401 },
       );
     }
 
+    const completions = completionsRes.rows;
+
     return NextResponse.json({
-      player: playerRes.data,
-      completedStages: (completionsRes.data ?? []).map(
-        (c: { stage_number: number }) => c.stage_number,
-      ),
-      completions: completionsRes.data ?? [],
+      player: playerRow,
+      completedStages: completions.map((c: { stage_number: number }) => c.stage_number),
+      completions,
     });
   } catch (error: unknown) {
     console.error('[/api/game/player]', error);

@@ -1,8 +1,8 @@
-// Admin dashboard. Server component — fetches stats directly from Supabase
+// Admin dashboard. Server component — fetches stats directly from the DB
 // rather than re-routing through the API for the same auth check.
 
 import { requireAdmin } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { pool } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,48 +13,43 @@ interface Stats {
 }
 
 async function loadStats(): Promise<Stats> {
-  const supabase = getSupabaseServerClient();
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const [
-    playersTotal,
-    playersBanned,
-    playersRecent,
-    completionsTotal,
-    promptsTotal,
-    stageBreakdown,
+    playersTotalRes,
+    playersBannedRes,
+    playersRecentRes,
+    completionsTotalRes,
+    promptsTotalRes,
+    stageBreakdownRes,
   ] = await Promise.all([
-    supabase.from('players').select('*', { count: 'exact', head: true }),
-    supabase.from('players').select('*', { count: 'exact', head: true }).eq('is_banned', true),
-    supabase
-      .from('players')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', since24h),
-    supabase.from('stage_completions').select('*', { count: 'exact', head: true }),
-    supabase
-      .from('prompt_logs')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', since24h),
-    supabase.from('stage_completions').select('stage_number'),
+    pool.query('SELECT COUNT(*) AS count FROM players'),
+    pool.query('SELECT COUNT(*) AS count FROM players WHERE is_banned = true'),
+    pool.query('SELECT COUNT(*) AS count FROM players WHERE created_at >= $1', [since24h]),
+    pool.query('SELECT COUNT(*) AS count FROM stage_completions'),
+    pool.query('SELECT COUNT(*) AS count FROM prompt_logs WHERE created_at >= $1', [since24h]),
+    pool.query('SELECT stage_number FROM stage_completions'),
   ]);
 
   const counts: Record<number, number> = {};
-  for (const row of stageBreakdown.data ?? []) {
-    const n = (row as { stage_number: number }).stage_number;
+  for (const row of stageBreakdownRes.rows) {
+    const n = Number(row.stage_number);
     counts[n] = (counts[n] ?? 0) + 1;
   }
 
   return {
     players: {
-      total: playersTotal.count ?? 0,
-      banned: playersBanned.count ?? 0,
-      joinedLast24h: playersRecent.count ?? 0,
+      total: parseInt(playersTotalRes.rows[0]?.count ?? '0', 10),
+      banned: parseInt(playersBannedRes.rows[0]?.count ?? '0', 10),
+      joinedLast24h: parseInt(playersRecentRes.rows[0]?.count ?? '0', 10),
     },
     completions: {
-      total: completionsTotal.count ?? 0,
+      total: parseInt(completionsTotalRes.rows[0]?.count ?? '0', 10),
       byStage: counts,
     },
-    activity: { promptsLast24h: promptsTotal.count ?? 0 },
+    activity: {
+      promptsLast24h: parseInt(promptsTotalRes.rows[0]?.count ?? '0', 10),
+    },
   };
 }
 

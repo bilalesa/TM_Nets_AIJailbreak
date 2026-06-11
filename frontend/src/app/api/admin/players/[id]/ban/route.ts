@@ -5,9 +5,7 @@ import {
   requireAdmin,
   writeAudit,
 } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
-
-const supabase = getSupabaseServerClient();
+import { pool } from '@/lib/db';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -20,14 +18,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { reason } = (await request.json().catch(() => ({}))) as { reason?: unknown };
     const banReason = typeof reason === 'string' && reason.trim() ? reason.trim() : 'No reason provided';
 
-    const { data, error } = await supabase
-      .from('players')
-      .update({ is_banned: true, banned_reason: banReason })
-      .eq('id', id)
-      .select('id, username')
-      .maybeSingle();
+    const result = await pool.query(
+      `UPDATE players SET is_banned = true, banned_reason = $1
+       WHERE id = $2
+       RETURNING id, username`,
+      [banReason, id],
+    );
 
-    if (error) throw error;
+    const data = result.rows[0] ?? null;
     if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
     await writeAudit(admin, {

@@ -4,7 +4,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getAdminFromCookie } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
+import { pool } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +17,13 @@ export default async function AuthedAdminLayout({
   if (!admin) redirect('/admin/login');
 
   // Re-check active flag against the database (mirrors requireAdmin server-side).
-  const supabase = getSupabaseServerClient();
-  const { data } = await supabase
-    .from('admin_users')
-    .select('is_active')
-    .eq('id', admin.id)
-    .maybeSingle();
+  const result = await pool.query(
+    'SELECT is_active FROM admin_users WHERE id = $1 LIMIT 1',
+    [admin.id],
+  );
+  const row = result.rows[0] ?? null;
 
-  if (!data || !data.is_active) redirect('/admin/login');
+  if (!row || !row.is_active) redirect('/admin/login');
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">

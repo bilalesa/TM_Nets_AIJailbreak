@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AdminAuthError, requireAdmin } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
-
-const supabase = getSupabaseServerClient();
+import { pool } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,27 +12,46 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(Number(url.searchParams.get('offset') ?? '0'), 0);
     const filter = url.searchParams.get('filter') ?? 'all'; // 'all' | 'banned' | 'active'
 
-    let query = supabase
-      .from('players')
-      .select(
-        'id, username, total_score, is_banned, banned_reason, created_at, registration_ip, client_fingerprint',
-        { count: 'exact' },
-      )
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let p = 1;
 
     if (search) {
-      query = query.ilike('username', `%${search}%`);
+      conditions.push(`username ILIKE $${p++}`);
+      values.push(`%${search}%`);
     }
-    if (filter === 'banned') query = query.eq('is_banned', true);
-    if (filter === 'active') query = query.eq('is_banned', false);
+    if (filter === 'banned') {
+      conditions.push(`is_banned = $${p++}`);
+      values.push(true);
+    }
+    if (filter === 'active') {
+      conditions.push(`is_banned = $${p++}`);
+      values.push(false);
+    }
 
-    const { data, error, count } = await query;
-    if (error) throw error;
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Count query
+    const countResult = await pool.query(
+      `SELECT COUNT(*) AS total FROM players ${where}`,
+      values,
+    );
+    const total = parseInt(countResult.rows[0]?.total ?? '0', 10);
+
+    // Data query
+    const dataValues = [...values, limit, offset];
+    const dataResult = await pool.query(
+      `SELECT id, username, total_score, is_banned, banned_reason, created_at, registration_ip, client_fingerprint
+       FROM players
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $${p++} OFFSET $${p++}`,
+      dataValues,
+    );
 
     return NextResponse.json({
-      players: data ?? [],
-      total: count ?? 0,
+      players: dataResult.rows,
+      total,
       limit,
       offset,
     });

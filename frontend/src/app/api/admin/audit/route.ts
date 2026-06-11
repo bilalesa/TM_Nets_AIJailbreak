@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AdminAuthError, requireAdmin } from '@/lib/adminAuth';
-import { getSupabaseServerClient } from '@/lib/supabaseClient';
-
-const supabase = getSupabaseServerClient();
+import { pool } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,24 +12,46 @@ export async function GET(request: NextRequest) {
     const action = url.searchParams.get('action');
     const adminId = url.searchParams.get('adminId');
 
-    let query = supabase
-      .from('admin_audit_log')
-      .select(
-        'id, admin_id, action, target_type, target_id, details, ip_address, created_at, admin_users(email, name)',
-        { count: 'exact' },
-      )
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let p = 1;
 
-    if (action) query = query.eq('action', action);
-    if (adminId) query = query.eq('admin_id', adminId);
+    if (action) {
+      conditions.push(`a.action = $${p++}`);
+      values.push(action);
+    }
+    if (adminId) {
+      conditions.push(`a.admin_id = $${p++}`);
+      values.push(adminId);
+    }
 
-    const { data, error, count } = await query;
-    if (error) throw error;
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Count query
+    const countResult = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM admin_audit_log a
+       ${where}`,
+      values,
+    );
+    const total = parseInt(countResult.rows[0]?.total ?? '0', 10);
+
+    // Data query with JOIN
+    const dataValues = [...values, limit, offset];
+    const dataResult = await pool.query(
+      `SELECT a.id, a.admin_id, a.action, a.target_type, a.target_id, a.details, a.ip_address, a.created_at,
+              json_build_object('email', au.email, 'name', au.name) AS admin_users
+       FROM admin_audit_log a
+       LEFT JOIN admin_users au ON a.admin_id = au.id
+       ${where}
+       ORDER BY a.created_at DESC
+       LIMIT $${p++} OFFSET $${p++}`,
+      dataValues,
+    );
 
     return NextResponse.json({
-      entries: data ?? [],
-      total: count ?? 0,
+      entries: dataResult.rows,
+      total,
       limit,
       offset,
     });
