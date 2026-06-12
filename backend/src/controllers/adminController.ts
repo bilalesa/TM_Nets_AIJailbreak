@@ -637,3 +637,10 @@ export const updateStage = async (req: Request, res: Response): Promise<void> =>
     res.status(500).json({ error: 'Failed to update stage' });
   }
 };
+
+// GET /api/admin/me — returns the authenticated admin's claims
+export const getMe = (req: Request, res: Response) => {
+  const admin = req.admin;
+  if (!admin) return res.status(401).json({ error: 'Unauthorized' });
+  return res.json({ id: admin.id, email: admin.email, role: admin.role, name: admin.name });
+};

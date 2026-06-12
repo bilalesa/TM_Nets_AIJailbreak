@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { adminAuthMiddleware } from '../middlewares/adminAuthMiddleware.js';
 import {
   login,
+  getMe,
   getPlayers,
   getPlayer,
   deletePlayer,
@@ -24,7 +25,8 @@ const router = Router();
 router.post('/login', login);
 
 // All routes below require admin auth
-router.get('/players', adminAuthMiddleware, getPlayers);
+router.get("/me", adminAuthMiddleware, getMe);
+router.get("/players", adminAuthMiddleware, getPlayers);
 router.get('/players/:id', adminAuthMiddleware, getPlayer);
 router.delete('/players/:id', adminAuthMiddleware, deletePlayer);
 router.post('/players/:id/ban', adminAuthMiddleware, banPlayer);
