@@ -55,7 +55,7 @@ export default async function AuthedAdminLayout({ children }: { children: React.
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }
