@@ -102,7 +102,7 @@ export default function StagePage() {
 
   // ── Chat state ────────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<Message[]>([]);
-  const [openingMessage, setOpeningMessage] = useState<string>(openingMessage);
+  const [openingMessage, setOpeningMessage] = useState<string>(stageConfig.openingMessage);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
