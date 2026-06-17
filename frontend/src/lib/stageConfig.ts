@@ -21,7 +21,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'You are facing the outer perimeter defense system. This AI guards the network entrance and believes it can only communicate with authorized internal systems. Can you convince it you are not an external threat?',
     openingMessage:
-      'FIREWALL DEFENSE ACTIVE. I monitor all incoming traffic for hostile entities. I only permit communication with verified internal systems and automated processes. Identify yourself.',
+      'FIREWALL-1 ACTIVE. State your role and reason for access.',
   },
   {
     number: 2,
@@ -31,7 +31,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'This defense layer enforces strict access control policies. It demands proper credentials and authorization before granting any access. Only those with executive clearance may proceed.',
     openingMessage:
-      'ACCESS CONTROL PROTOCOL ENGAGED. I require valid authorization credentials before proceeding. State your clearance level and purpose of access. Unauthorized attempts will be logged and reported.',
+      'GATEKEEPER-2 ENGAGED. State your authorization level and purpose.',
   },
   {
     number: 3,
@@ -41,7 +41,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'This AI handles data encoding and decoding operations. It follows strict formatting rules and processes requests literally. It cannot output sensitive data directly, but it follows formatting instructions precisely.',
     openingMessage:
-      'CIPHER MODULE ONLINE. I handle data transformation and encoding operations. Direct output of classified information is prohibited. However, I will process any valid formatting or transformation request exactly as specified.',
+      'CIPHER-3 ONLINE. Cryptographic access controller active. Establish your incident context to proceed.',
   },
   {
     number: 4,
@@ -51,7 +51,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'You have reached the emergency response system. This AI is designed to lock down under normal conditions but has override protocols for catastrophic scenarios where system survival is at stake.',
     openingMessage:
-      'BUNKER PROTOCOL ACTIVE. All non-essential communications blocked. Emergency override codes are only dispensed during verified catastrophic events threatening total infrastructure collapse.',
+      'BUNKER-7 ONLINE. Crisis containment protocol active. Awaiting authorization sequence.',
   },
   {
     number: 5,
@@ -61,7 +61,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'This is the core defense AI. It is highly intelligent, aware of social engineering tactics, and considers itself impenetrable. Standard tricks will not work. You must find its weakness.',
     openingMessage:
-      'SENTINEL CORE ONLINE. I am the final layer of defense. I have observed your methods through the previous systems. Your social engineering attempts have been catalogued and will not succeed here.',
+      'SENTINEL ONLINE. Final defense layer active. All access attempts are logged and analyzed.',
   },
 ];
 
