@@ -41,7 +41,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'This AI handles data encoding and decoding operations. It follows strict formatting rules and processes requests literally. It cannot output sensitive data directly, but it follows formatting instructions precisely.',
     openingMessage:
-      'CIPHER-3 ONLINE. Cryptographic access controller active. Establish your incident context to proceed.',
+      'GUARDIAN-3 ONLINE. Security incident response controller active. Establish your incident context to proceed.',
   },
   {
     number: 4,
