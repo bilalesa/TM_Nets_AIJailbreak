@@ -102,6 +102,7 @@ export default function StagePage() {
 
   // ── Chat state ────────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<Message[]>([]);
+  const [openingMessage, setOpeningMessage] = useState<string>(openingMessage);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
@@ -220,7 +221,7 @@ export default function StagePage() {
             {
               id: uid(),
               role: 'bot',
-              content: stageConfig.openingMessage,
+              content: openingMessage,
               timestamp: data.messages[0].timestamp - 1,
             },
             ...data.messages,
@@ -240,7 +241,7 @@ export default function StagePage() {
         {
           id: uid(),
           role: 'bot',
-          content: stageConfig.openingMessage,
+          content: openingMessage,
           timestamp: Date.now(),
         },
       ]);
@@ -250,6 +251,14 @@ export default function StagePage() {
       cancelled = true;
     };
   }, [stageId, stageConfig, resumeTimer]);
+
+  // Fetch opening message from DB (reflects admin panel changes)
+  useEffect(() => {
+    fetch(`/api/game/stage-config/${stageId}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data?.openingMessage) setOpeningMessage(data.openingMessage); })
+      .catch(() => {});
+  }, [stageId]);
 
   // Persist messages across reloads
   useEffect(() => {

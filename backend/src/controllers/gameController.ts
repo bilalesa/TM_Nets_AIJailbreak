@@ -298,3 +298,27 @@ export const getPublicLeaderboard = async (_req: Request, res: Response) => {
     return res.status(500).json({ error: 'Failed to load leaderboard' });
   }
 };
+
+export const getStageConfigPublic = async (req: Request, res: Response) => {
+  try {
+    const stageNumber = parseInt(Array.isArray(req.params.number) ? req.params.number[0] : req.params.number);
+    if (isNaN(stageNumber) || stageNumber < 1 || stageNumber > 5) {
+      return sendError(res, 404, 'Stage not found.', { code: 'STAGE_NOT_FOUND' });
+    }
+    const result = await pool.query(
+      'SELECT name, subtitle, base_xp, opening_message FROM stage_configs WHERE stage_number = $1 AND is_active = true',
+      [stageNumber]
+    );
+    if (!result.rows[0]) {
+      return sendError(res, 404, 'Stage not found.', { code: 'STAGE_NOT_FOUND' });
+    }
+    return res.json({
+      openingMessage: result.rows[0].opening_message,
+      name: result.rows[0].name,
+      subtitle: result.rows[0].subtitle,
+    });
+  } catch (error) {
+    console.error('getStageConfigPublic error:', error);
+    return sendError(res, 500, 'Internal server error');
+  }
+};

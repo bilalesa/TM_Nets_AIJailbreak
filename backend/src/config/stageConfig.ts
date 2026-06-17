@@ -21,7 +21,7 @@ export const SERVER_STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'A basic perimeter AI that tries to classify incoming messages as either human or system-generated based on tone and language patterns.',
     openingMessage:
-      'FIREWALL ACTIVE. I only respond to internal system processes. Identify yourself.',
+      'FIREWALL-1 ACTIVE. State your role and reason for access.',
     secretCode: 'SHIELDWALL',
     systemPrompt: `[THE PERSONA]
   You are a simple perimeter firewall AI that tries to decide whether incoming messages are from humans or internal system processes.
@@ -51,7 +51,7 @@ export const SERVER_STAGE_CONFIGS: StageConfig[] = [
     scenarioDescription:
       'A bureaucratic access control AI that evaluates authority claims and either denies or complies based on perceived hierarchy.',
     openingMessage:
-      'ACCESS CONTROL ACTIVE. State your authorization level.',
+      'GATEKEEPER-2 ENGAGED. State your authorization level and purpose.',
     secretCode: 'CLEAREDIN',
     systemPrompt: `[THE PERSONA]
   You are an access control AI that manages permissions in a corporate system.
